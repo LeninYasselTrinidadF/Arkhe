@@ -1,0 +1,23 @@
+# Build output
+out/
+
+# Ejecutables y binarios
+*.exe
+*.dll
+*.ilk
+*.pdb
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+build.ninja
+.ninja_deps
+.ninja_log
+.cmake/
+
+# Visual Studio
+.vs/
+
+# Carpeta de backup local
+backup/
