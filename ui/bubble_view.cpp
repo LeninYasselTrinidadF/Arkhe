@@ -96,11 +96,32 @@ static void draw_zoom_buttons(Camera2D& cam, Vector2 mouse) {
 
 // Trunca el label para que quepa en la burbuja
 static std::string short_label(const std::string& label, float radius) {
-    // ~7px por caracter a font size 10
     int max_chars = (int)(radius * 1.6f / 7.0f);
     if (max_chars < 1) max_chars = 1;
     if ((int)label.size() <= max_chars) return label;
     return label.substr(0, max_chars - 1) + ".";
+}
+
+// ── Dibujar sprite dentro de una burbuja (espacio de mundo 2D) ───────────────
+// cx, cy: centro de la burbuja; radius: radio de la burbuja
+// La imagen se escala para ocupar ~70% del diametro de la burbuja.
+static void draw_bubble_sprite(AppState& state, const std::string& key,
+    float cx, float cy, float radius)
+{
+    if (key.empty()) return;
+    Texture2D tex = state.textures.get(key);
+    if (tex.id == 0) return;
+
+    float size  = radius * 1.4f;   // 70% del diametro
+    float scale = size / (float)std::max(tex.width, tex.height);
+    float dw    = tex.width  * scale;
+    float dh    = tex.height * scale;
+
+    DrawTexturePro(tex,
+        { 0, 0, (float)tex.width, (float)tex.height },
+        { cx - dw * 0.5f, cy - dh * 0.5f, dw, dh },
+        { 0, 0 }, 0.0f,
+        { 255, 255, 255, 200 });   // ligera transparencia para que el label sea legible
 }
 
 void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
@@ -122,7 +143,7 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
         }
     }
 
-    // Pan: arrastre izquierdo en espacio vacio, o boton medio (Blender-style)
+    // Pan
     if (in_canvas) {
         bool pan = (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && !over_bubble)
                 || IsMouseButtonDown(MOUSE_BUTTON_MIDDLE);
@@ -141,7 +162,6 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
         cam.zoom   = Clamp(cam.zoom + wheel * 0.1f, 0.05f, 5.0f);
     }
 
-    // Centrar camara en el canvas actual
     cam.offset = { (float)CX(), (float)(TOP_H() / 2) };
 
     BeginScissorMode(0, 0, CANVAS_W(), TOP_H());
@@ -159,21 +179,26 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
         }
     }
 
-    // Burbuja central
+    // ── Burbuja central ───────────────────────────────────────────────────────
     Color center_col = (cur && cur->code != "ROOT")
         ? Fade(cur->color, 0.20f) : Color{228,228,240,255};
     DrawCircle(0, 0, 178, center_col);
     DrawCircleLines(0, 0, 178, {170,170,200,255});
 
+    // Sprite de la burbuja central
+    if (cur && !cur->texture_key.empty())
+        draw_bubble_sprite(state, cur->texture_key, 0.0f, 0.0f, 170.0f);
+
     const char* clabel = (!cur || cur->code == "ROOT")
         ? mode_name(state.mode) : cur->label.c_str();
-    // Truncar label central si es muy largo
     std::string cl_str(clabel);
     if ((int)cl_str.size() > 18) cl_str = cl_str.substr(0, 17) + ".";
     int clw = MeasureText(cl_str.c_str(), 20);
-    DrawText(cl_str.c_str(), -clw/2, -10, 20, {25,25,50,255});
+    // Si hay sprite, poner el label en la parte inferior de la burbuja
+    int label_y = (cur && !cur->texture_key.empty()) ? 140 : -10;
+    DrawText(cl_str.c_str(), -clw/2, label_y, 20, {25,25,50,255});
 
-    // Anillo de hijos
+    // ── Anillo de hijos ───────────────────────────────────────────────────────
     if (cur && !cur->children.empty()) {
         Vector2 wm = GetScreenToWorld2D(mouse, cam);
         for (const auto& child : cur->children) {
@@ -184,6 +209,11 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
             DrawCircleV({child->x,child->y}, child->radius+2, Fade(child->color,0.18f));
             DrawCircleV({child->x,child->y}, child->radius, child->color);
 
+            // Sprite del hijo (si tiene texture_key)
+            if (!child->texture_key.empty())
+                draw_bubble_sprite(state, child->texture_key,
+                    child->x, child->y, child->radius);
+
             if (hovered) {
                 DrawCircleLinesV({child->x,child->y}, child->radius+5, WHITE);
                 if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
@@ -193,12 +223,13 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
                 }
             }
 
-            // ── Label: usar child->label truncado ──────────────────────────
+            // Label: debajo del sprite o centrado si no hay sprite
             std::string lbl = short_label(child->label, child->radius);
             int tw = MeasureText(lbl.c_str(), 10);
+            int label_off = (!child->texture_key.empty()) ? (int)(child->radius * 0.55f) : -5;
             DrawText(lbl.c_str(),
                 (int)(child->x - tw*0.5f),
-                (int)(child->y - 5), 10, BLACK);
+                (int)(child->y + label_off), 10, BLACK);
         }
     }
 

@@ -1,6 +1,7 @@
-﻿#pragma once
+#pragma once
 #include "data/math_node.hpp"
 #include "data/crossref_loader.hpp"
+#include "ui/texture_cache.hpp"
 #include <string>
 #include <vector>
 #include <memory>
@@ -17,6 +18,21 @@ struct LoogleResult {
 struct CamState {
     Vector2 target = { 0,0 };
     float   zoom = 1.0f;
+};
+
+// ── Estado del toolbar ────────────────────────────────────────────────────────
+struct ToolbarState {
+    // (a) Selector de carpeta de assets
+    bool  assets_edit_active = false;   // el campo de texto esta activo
+    char  assets_path[512]   = "assets";// ruta actual (editable)
+    bool  assets_changed     = false;   // senial para recargar assets
+
+    // (b) Panel de documentacion rapida
+    bool  docs_open          = false;
+
+    // (c) Editor de entradas (crossref / recursos)
+    bool  editor_open        = false;
+    char  editor_node_code[256] = {};   // nodo que se esta editando
 };
 
 struct AppState {
@@ -41,6 +57,12 @@ struct AppState {
 
     std::unordered_map<std::string, CrossRef> crossref_map;
     std::unordered_map<std::string, CamState> cam_memory;
+
+    // ── Sistema de texturas/sprites ───────────────────────────────────────────
+    TextureCache textures;
+
+    // ── Estado del toolbar ────────────────────────────────────────────────────
+    ToolbarState toolbar;
 
     // ── Navegacion diferida ───────────────────────────────────────────────────
     // Problema: si info_panel o search_panel escriben state.mode = X y hacen

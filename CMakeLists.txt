@@ -20,6 +20,7 @@ add_executable(Arkhe
     ui/bubble_view.cpp
     ui/search_panel.cpp
     ui/info_panel.cpp
+    ui/toolbar.cpp
     search/loogle.cpp
 )
 

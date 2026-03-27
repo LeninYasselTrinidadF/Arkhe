@@ -19,6 +19,10 @@ struct MathNode {
     std::string note;
     std::string latex_symbol;
 
+    // Clave opcional para mostrar una imagen/sprite en la burbuja.
+    // Ejemplo: "algebra_icon" -> assets/graphics/algebra_icon.png
+    std::string texture_key;
+
     NodeLevel level  = NodeLevel::Root;
     float     radius = 40.0f;
     Color     color  = {200, 200, 220, 255};
