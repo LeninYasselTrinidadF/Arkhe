@@ -1,0 +1,37 @@
+{
+  "_comment": "Mapa de modulos Mathlib a codigos MSC y temas del temario Estandar.",
+  "_format": "{ 'Mathlib.Module.Path': { 'msc': ['XXYYz'], 'standard': ['Area.Subtopic'] } }",
+
+  "Mathlib.Data.Real.Basic": {
+    "msc": ["26A03", "54E35"],
+    "standard": ["Analysis.Real.Construction", "Analysis.Real.Topology"]
+  },
+  "Mathlib.Topology.Basic": {
+    "msc": ["54A05", "54A10"],
+    "standard": ["Topology.TopologicalSpaces", "Topology.Continuity"]
+  },
+  "Mathlib.Algebra.Group.Defs": {
+    "msc": ["20A05", "20-01"],
+    "standard": ["Algebra.Groups.Definition", "Algebra.Groups.Homomorphisms"]
+  },
+  "Mathlib.LinearAlgebra.Basic": {
+    "msc": ["15A03", "15A04"],
+    "standard": ["LinearAlgebra.VectorSpaces", "LinearAlgebra.LinearMaps"]
+  },
+  "Mathlib.Analysis.ODE.Gronwall": {
+    "msc": ["34A12", "34A34"],
+    "standard": ["ODE.ExistenceUniqueness", "ODE.Inequalities"]
+  },
+  "Mathlib.Dynamics.Flow": {
+    "msc": ["37C10", "37B05"],
+    "standard": ["DynSys.Flows", "DynSys.InvariantSets"]
+  },
+  "Mathlib.GroupTheory.GroupAction.Defs": {
+    "msc": ["20M30", "20A05"],
+    "standard": ["Algebra.Groups.Actions"]
+  },
+  "Mathlib.Topology.Algebra.Group.Defs": {
+    "msc": ["22A05", "54H10"],
+    "standard": ["Topology.TopologicalGroups"]
+  }
+}

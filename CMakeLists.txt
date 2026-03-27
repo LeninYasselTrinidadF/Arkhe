@@ -16,6 +16,7 @@ add_executable(Arkhe
     main.cpp
     data/msc_loader.cpp
     data/mathlib_loader.cpp
+    data/crossref_loader.cpp
     ui/bubble_view.cpp
     ui/search_panel.cpp
     ui/info_panel.cpp

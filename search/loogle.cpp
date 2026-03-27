@@ -74,12 +74,13 @@ static std::string loogle_get(const std::string& query) {
     }
 
     std::wstring host = L"loogle.lean-lang.org";
-    std::wstring path = L"/?q=" + std::wstring(encoded.begin(), encoded.end());
+    std::wstring path = L"/json?q=" + std::wstring(encoded.begin(), encoded.end());
 
     HINTERNET session = WinHttpOpen(
-        L"MathExplorer/1.0",
+        L"MathExplorer/1.0",   // ← aquí
         WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
-        WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+        WINHTTP_NO_PROXY_NAME,
+        WINHTTP_NO_PROXY_BYPASS, 0);
     if (!session) return "";
 
     HINTERNET connect = WinHttpConnect(session, host.c_str(),
