@@ -25,13 +25,16 @@ add_executable(Arkhe
     ui/info_crossrefs.cpp
     ui/info_resources.cpp
     ui/toolbar.cpp
+    ui/docs_panel.cpp
+    ui/entry_editor.cpp
+    ui/ubicaciones_panel.cpp
+    ui/font_panel.cpp
     ui/theme.cpp
     ui/nine_patch.cpp
     ui/skin.cpp
     ui/panel_widget.cpp
-    ui/ubicaciones_panel.cpp
-    ui/docs_panel.cpp
-    ui/entry_editor.cpp
+    ui/font_manager.cpp
+    ui/bubble_stats.cpp
     search/loogle.cpp
 )
 

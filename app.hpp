@@ -21,7 +21,7 @@ struct CamState {
 };
 
 // ── Estado del toolbar ────────────────────────────────────────────────────────
-enum class ToolbarTab { None, Ubicaciones, Docs, Editor };
+enum class ToolbarTab { None, Ubicaciones, Docs, Editor, Font };
 
 struct ToolbarState {
     ToolbarTab active_tab = ToolbarTab::None;
@@ -43,6 +43,7 @@ struct ToolbarState {
     bool docs_open = false;
     bool editor_open = false;
     bool ubicaciones_open = false;
+    bool font_panel_open = false;
 
     // ── Tema visual ───────────────────────────────────────────────────────────
     // 0=Dark  1=Light  2=Bocchi  3=ChainsawMan  4=Generic
