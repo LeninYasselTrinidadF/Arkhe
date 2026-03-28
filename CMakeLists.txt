@@ -20,8 +20,14 @@ add_executable(Arkhe
     ui/bubble_view.cpp
     ui/search_panel.cpp
     ui/info_panel.cpp
+    ui/info_header.cpp
+    ui/info_description.cpp
+    ui/info_crossrefs.cpp
+    ui/info_resources.cpp
     ui/toolbar.cpp
     ui/theme.cpp
+    ui/nine_patch.cpp
+    ui/skin.cpp
     ui/panel_widget.cpp
     ui/ubicaciones_panel.cpp
     ui/docs_panel.cpp

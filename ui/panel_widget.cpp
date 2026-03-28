@@ -1,4 +1,5 @@
 #include "panel_widget.hpp"
+#include "overlay.hpp"   // ← registrar rects de paneles flotantes
 #include "theme.hpp"
 #include <cstring>
 
@@ -98,15 +99,30 @@ bool PanelWidget::draw_window_frame(int px, int py, int pw, int ph,
     const char* title, Color title_col, Color border_col, Vector2 mouse) const
 {
     const Theme& th = g_theme;
+
+    // ── Registrar este panel en el sistema de overlay ─────────────────────────
+    // Cualquier sistema que consulte overlay::blocks_mouse() sabrá que el mouse
+    // está sobre un panel flotante y no procesará eventos de burbuja/divisor.
+    overlay::push_rect({ (float)px, (float)py, (float)pw, (float)ph });
+
+    // ── Sombra ────────────────────────────────────────────────────────────────
     if (th.use_transparency)
         DrawRectangle(px + 4, py + 4, pw, ph, th.shadow);
+
+    // ── Fondo ─────────────────────────────────────────────────────────────────
     DrawRectangle(px, py, pw, ph, th.bg_panel);
-    DrawRectangleLinesEx({ (float)px,(float)py,(float)pw,(float)ph }, 1.5f, border_col);
+    DrawRectangleLinesEx({ (float)px,(float)py,(float)pw,(float)ph },
+                         1.5f, border_col);
+
+    // ── Cabecera ──────────────────────────────────────────────────────────────
     DrawRectangle(px, py, pw, 30, th.bg_panel_header);
     DrawText(title, px + 12, py + 9, 12, title_col);
-    Rectangle cr = { (float)(px + pw - 28),(float)(py + 5),22.0f,22.0f };
+
+    // ── Botón cerrar ──────────────────────────────────────────────────────────
+    Rectangle cr = { (float)(px + pw - 28), (float)(py + 5), 22.0f, 22.0f };
     bool chov = CheckCollisionPointRec(mouse, cr);
     DrawRectangleRec(cr, chov ? th.close_bg_hover : th.close_bg);
     DrawText("x", (int)cr.x + 7, (int)cr.y + 4, 13, th.text_primary);
+
     return chov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
 }

@@ -1,0 +1,37 @@
+{
+  "_comment": "Skin de UI para Arkhe. Cada elemento define la imagen (en assets/graphics/) y los margenes del nine-patch [top, right, bottom, left] en pixeles de la textura fuente.",
+  "_tip": "Si un elemento no tiene imagen o el archivo no existe, se usa el fallback de color solido del theme activo.",
+
+  "elements": {
+    "bubble": {
+      "_comment": "Burbuja central e hijos. Se recorta en circulo via shader.",
+      "image":   "bubble.png",
+      "margins": [0, 0, 0, 0]
+    },
+    "button": {
+      "_comment": "Botones genericos (zoom +/-, Atras, Cargar, Buscar...).",
+      "image":   "button.png",
+      "margins": [8, 8, 8, 8]
+    },
+    "panel": {
+      "_comment": "Fondo de paneles flotantes (Editor, Docs, Ubicaciones).",
+      "image":   "panel.png",
+      "margins": [16, 16, 16, 16]
+    },
+    "field": {
+      "_comment": "Campos de texto editables.",
+      "image":   "field.png",
+      "margins": [6, 6, 6, 6]
+    },
+    "toolbar_bg": {
+      "_comment": "Fondo del toolbar superior.",
+      "image":   "toolbar_bg.png",
+      "margins": [0, 0, 4, 0]
+    },
+    "card": {
+      "_comment": "Tarjetas de recursos, crossrefs y resultados Loogle.",
+      "image":   "card.png",
+      "margins": [8, 8, 8, 8]
+    }
+  }
+}
