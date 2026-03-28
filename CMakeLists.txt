@@ -21,6 +21,10 @@ add_executable(Arkhe
     ui/search_panel.cpp
     ui/info_panel.cpp
     ui/toolbar.cpp
+    ui/panel_widget.cpp
+    ui/ubicaciones_panel.cpp
+    ui/docs_panel.cpp
+    ui/entry_editor.cpp
     search/loogle.cpp
 )
 

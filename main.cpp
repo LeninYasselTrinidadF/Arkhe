@@ -11,28 +11,33 @@
 #include "raymath.h"
 #include <cstring>
 
-int g_split_y = 660;
+// g_split_y: coordenada Y absoluta del divisor (>= TOOLBAR_H).
+int g_split_y = TOOLBAR_H + 640;
 
-// ── Helpers de recarga de assets ──────────────────────────────────────────────
-// Reconstruye la ruta de un asset dado el directorio raiz configurado.
-static std::string asset_path(AppState& state, const char* rel) {
-    std::string base = state.toolbar.assets_path;
-    if (!base.empty() && base.back() != '/' && base.back() != '\\')
-        base += '/';
-    return base + rel;
+// ── Helpers de rutas ──────────────────────────────────────────────────────────
+
+static std::string ensure_slash(const std::string& p) {
+    if (p.empty()) return p;
+    if (p.back() != '/' && p.back() != '\\') return p + '/';
+    return p;
 }
+
+static std::string asset_path(AppState& state, const char* rel) {
+    return ensure_slash(state.toolbar.assets_path) + rel;
+}
+
+// ── Recarga de assets ─────────────────────────────────────────────────────────
 
 static void reload_all_assets(AppState& state,
     std::shared_ptr<MathNode>& root_msc,
     std::shared_ptr<MathNode>& root_mathlib,
     std::shared_ptr<MathNode>& root_std)
 {
-    // Recargar datos
-    root_msc     = load_msc2020(asset_path(state, "msc2020_tree.json"));
-    root_mathlib = load_mathlib(asset_path(state, "mathlib_layout.json"));
-    root_std     = nullptr;   // (sin implementacion todavia)
+    root_msc     = load_msc2020    (asset_path(state, "msc2020_tree.json"));
+    root_mathlib = load_mathlib    (asset_path(state, "mathlib_layout.json"));
+    root_std     = nullptr;
 
-    auto crossrefs = load_crossref(asset_path(state, "crossref.json"));
+    auto crossrefs = load_crossref (asset_path(state, "crossref.json"));
     if (root_mathlib) inject_crossrefs(root_mathlib.get(), crossrefs);
 
     state.mathlib_root  = root_mathlib;
@@ -40,16 +45,21 @@ static void reload_all_assets(AppState& state,
     state.standard_root = root_std;
     state.crossref_map  = crossrefs;
 
-    // Recargar texturas
-    state.textures.set_root(asset_path(state, "graphics"));
+    // Las graficas usan graphics_path si esta configurado; si no, assets/graphics/
+    std::string gfx = state.toolbar.graphics_path;
+    if (gfx[0] == '\0')
+        gfx = asset_path(state, "graphics");
+    state.textures.set_root(gfx);
     state.textures.preload_all();
 
-    // Reiniciar navegacion
     state.nav_stack.clear();
     state.cam_memory.clear();
     if (root_msc) state.push(root_msc);
 
-    TraceLog(LOG_INFO, "Assets recargados desde: %s", state.toolbar.assets_path);
+    TraceLog(LOG_INFO, "Assets recargados desde: %s | entries: %s | graphics: %s",
+        state.toolbar.assets_path,
+        state.toolbar.entries_path,
+        state.toolbar.graphics_path);
 }
 
 int main() {
@@ -62,10 +72,12 @@ int main() {
 
     AppState state;
 
-    // ── Carga inicial ─────────────────────────────────────────────────────────
-    // La ruta base de assets viene del toolbar (por defecto "assets")
-    auto root_msc     = load_msc2020(asset_path(state, "msc2020_tree.json"));
-    auto root_mathlib = load_mathlib(asset_path(state, "mathlib_layout.json"));
+    // Valores iniciales: entries y graphics como sub-rutas de assets/
+    strncpy(state.toolbar.entries_path,  "assets/entries/",  511);
+    strncpy(state.toolbar.graphics_path, "assets/graphics/", 511);
+
+    auto root_msc     = load_msc2020  (asset_path(state, "msc2020_tree.json"));
+    auto root_mathlib = load_mathlib  (asset_path(state, "mathlib_layout.json"));
     std::shared_ptr<MathNode> root_std;
 
     auto crossrefs = load_crossref(asset_path(state, "crossref.json"));
@@ -76,8 +88,7 @@ int main() {
     state.standard_root = root_std;
     state.crossref_map  = crossrefs;
 
-    // Precargar texturas desde assets/graphics/
-    state.textures.set_root(asset_path(state, "graphics"));
+    state.textures.set_root(ensure_slash(state.toolbar.graphics_path));
     state.textures.preload_all();
 
     if (root_msc) state.push(root_msc);
@@ -97,7 +108,7 @@ int main() {
     while (!WindowShouldClose()) {
         Vector2 mouse = GetMousePosition();
 
-        // ── Recarga de assets si el toolbar lo solicito ───────────────────────
+        // ── Recarga de assets ─────────────────────────────────────────────────
         if (state.toolbar.assets_changed) {
             state.toolbar.assets_changed = false;
             reload_all_assets(state, root_msc, root_mathlib, root_std);
@@ -105,7 +116,7 @@ int main() {
             prev_depth = (int)state.nav_stack.size();
         }
 
-        // ── Consumir navegacion diferida ──────────────────────────────────────
+        // ── Navegacion diferida ───────────────────────────────────────────────
         if (state.pending_nav.active) {
             state.pending_nav.active = false;
             state.mode = state.pending_nav.mode;
@@ -120,18 +131,21 @@ int main() {
         }
 
         // ── Divisor arrastrable ───────────────────────────────────────────────
+        const int SPLIT_MIN = TOOLBAR_H + 160;
+        const int SPLIT_MAX = SH() - 120;
+
         bool near_split = mouse.y >= g_split_y - 4 && mouse.y <= g_split_y + 4;
         SetMouseCursor((near_split || dragging_split)
             ? MOUSE_CURSOR_RESIZE_NS : MOUSE_CURSOR_DEFAULT);
         if (near_split && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) dragging_split = true;
         if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT))               dragging_split = false;
         if (dragging_split)
-            g_split_y = Clamp((int)mouse.y, 160, SH() - 120);
+            g_split_y = Clamp((int)mouse.y, SPLIT_MIN, SPLIT_MAX);
 
         if (std::abs(mouse.y - g_split_y) < 40) {
             float wh = GetMouseWheelMove();
             if (wh != 0.0f)
-                g_split_y = Clamp(g_split_y - (int)(wh * 30.f), 160, SH() - 120);
+                g_split_y = Clamp(g_split_y - (int)(wh * 30.f), SPLIT_MIN, SPLIT_MAX);
         }
 
         // ── Cambio de modo ────────────────────────────────────────────────────
@@ -156,7 +170,6 @@ int main() {
             prev_depth = cur_depth;
         }
 
-        // ESC: volver un nivel
         if (IsKeyPressed(KEY_ESCAPE)) {
             state.save_cam(cam);
             state.pop();
@@ -165,16 +178,22 @@ int main() {
         BeginDrawing();
         ClearBackground({ 11, 11, 18, 255 });
 
+        // ── 1. TOOLBAR (y = 0) ────────────────────────────────────────────────
+        draw_toolbar(state, mouse);
+
+        // ── 2. Zona de burbujas (y >= TOOLBAR_H) ──────────────────────────────
         draw_bubble_view(state, cam, mouse);
         draw_mode_switcher(state, mouse);
 
-        DrawLineEx({ (float)CANVAS_W(), 0 }, { (float)CANVAS_W(), (float)TOP_H() },
+        DrawLineEx(
+            { (float)CANVAS_W(), (float)UI_TOP() },
+            { (float)CANVAS_W(), (float)g_split_y },
             1.f, { 50, 50, 70, 255 });
 
         draw_search_panel(state, current_root().get(), mouse);
         draw_info_panel(state, mouse);
 
-        // Linea divisora
+        // ── 3. Divisor horizontal ─────────────────────────────────────────────
         Color sc = (near_split || dragging_split)
             ? Color{ 100, 120, 200, 255 } : Color{ 45, 45, 70, 255 };
         DrawLineEx({ 0, (float)g_split_y }, { (float)SW(), (float)g_split_y },
@@ -184,16 +203,19 @@ int main() {
         for (int d : {-10, 0, 10})
             DrawRectangle(hx + d - 2, g_split_y - 1, 4, 2, { 180, 180, 220, 160 });
 
-        // ── Toolbar (se dibuja encima de todo) ────────────────────────────────
-        draw_toolbar(state, mouse);
-
-        // ── Paneles flotantes del toolbar ─────────────────────────────────────
+        // ── 4. Paneles flotantes ──────────────────────────────────────────────
+        // Orden: ubicaciones primero (alineado izquierda), luego docs y editor
+        draw_ubicaciones_panel(state, mouse);
         draw_docs_panel(state, mouse);
         draw_entry_editor(state, mouse);
 
         DrawFPS(10, SH() - 20);
         EndDrawing();
     }
+
+    // Limpiar textura LaTeX si existe
+    if (state.latex_render.tex_loaded)
+        UnloadTexture(state.latex_render.texture);
 
     CloseWindow();
     return 0;

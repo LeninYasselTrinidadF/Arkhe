@@ -21,18 +21,44 @@ struct CamState {
 };
 
 // ── Estado del toolbar ────────────────────────────────────────────────────────
+// Tres tabs principales estilo VS Code: Ubicaciones | Documentacion | Editor
+enum class ToolbarTab { None, Ubicaciones, Docs, Editor };
+
 struct ToolbarState {
-    // (a) Selector de carpeta de assets
-    bool  assets_edit_active = false;   // el campo de texto esta activo
-    char  assets_path[512]   = "assets";// ruta actual (editable)
-    bool  assets_changed     = false;   // senial para recargar assets
+    ToolbarTab active_tab       = ToolbarTab::None;
 
-    // (b) Panel de documentacion rapida
-    bool  docs_open          = false;
+    // Rutas independientes
+    char assets_path[512]       = "assets/";
+    char entries_path[512]      = "assets/entries/";
+    char graphics_path[512]     = "assets/graphics/";
+    char latex_path[512]        = "C:/texlive/2025/bin/windows/pdflatex.exe";
+    char pdftoppm_path[512]     = "C:/texlive/2025/bin/windows/pdftoppm.exe";
 
-    // (c) Editor de entradas (crossref / recursos)
-    bool  editor_open        = false;
-    char  editor_node_code[256] = {};   // nodo que se esta editando
+    // Flags de activacion
+    bool assets_changed         = false;
+
+    // Cual campo de texto esta activo en el panel Ubicaciones
+    int  active_field           = -1;   // 0=assets 1=entries 2=graphics 3=latex 4=pdftoppm
+
+    // Paneles flotantes (retrocompatibilidad)
+    bool docs_open              = false;
+    bool editor_open            = false;
+    bool ubicaciones_open       = false;
+};
+
+// ── Estado de render LaTeX ────────────────────────────────────────────────────
+// Se compila async: pdflatex → pdftoppm → Texture2D
+enum class LatexRenderState { Idle, Compiling, Ready, Failed };
+
+struct LatexRenderJob {
+    std::string         tex_code;       // codigo del nodo que origino el render
+    std::string         tex_path;       // ruta al .tex fuente
+    std::string         png_path;       // ruta al PNG generado (temp)
+    LatexRenderState    state    = LatexRenderState::Idle;
+    std::string         error_msg;
+    Texture2D           texture  = {};
+    bool                tex_loaded = false;
+    std::atomic<bool>   thread_done{ false };
 };
 
 struct AppState {
@@ -64,14 +90,10 @@ struct AppState {
     // ── Estado del toolbar ────────────────────────────────────────────────────
     ToolbarState toolbar;
 
+    // ── Render LaTeX (info_panel) ─────────────────────────────────────────────
+    LatexRenderJob latex_render;
+
     // ── Navegacion diferida ───────────────────────────────────────────────────
-    // Problema: si info_panel o search_panel escriben state.mode = X y hacen
-    // push() en el mismo frame, main.cpp detecta (mode != prev_mode) y ejecuta
-    // nav_stack.clear() + push(root), pisando la navegacion recien hecha.
-    //
-    // Solucion: en lugar de navegar directamente, escribir la intencion aqui.
-    // main.cpp la consume al INICIO del siguiente frame, antes del bloque
-    // prev_mode, de modo que ese bloque ve mode == prev_mode y no interfiere.
     struct PendingNav {
         bool        active = false;
         ViewMode    mode = ViewMode::MSC2020;
