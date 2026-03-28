@@ -21,6 +21,7 @@ add_executable(Arkhe
     ui/search_panel.cpp
     ui/info_panel.cpp
     ui/toolbar.cpp
+    ui/theme.cpp
     ui/panel_widget.cpp
     ui/ubicaciones_panel.cpp
     ui/docs_panel.cpp
@@ -28,6 +29,10 @@ add_executable(Arkhe
     search/loogle.cpp
 )
 
+target_sources(Arkhe PRIVATE
+    vendor/tinyfiledialogs.c
+)
+target_include_directories(Arkhe PRIVATE vendor/)
 target_include_directories(Arkhe PRIVATE ${CMAKE_SOURCE_DIR})
 
 target_link_libraries(Arkhe PRIVATE

@@ -1,4 +1,5 @@
 #include "bubble_view.hpp"
+#include "theme.hpp"
 #include "raylib.h"
 #include "raymath.h"
 #include <cstdio>
@@ -31,8 +32,8 @@ static ViewMode mode_next(ViewMode m) {
 bool draw_arrow(int cx, int cy, bool left, Vector2 mouse) {
     constexpr int HW = 12, HH = 10;
     Rectangle r = { (float)(cx - HW - 4),(float)(cy - HH - 4),(float)(HW * 2 + 8),(float)(HH * 2 + 8) };
-    bool hovered = CheckCollisionPointRec(mouse, r);
-    Color col = hovered ? WHITE : Color{ 180,180,210,200 };
+    bool hov = CheckCollisionPointRec(mouse, r);
+    Color col = hov ? g_theme.ctrl_text : th_alpha(g_theme.ctrl_text_dim);
     if (left)
         DrawTriangle({ (float)(cx + HW),(float)(cy - HH) },
             { (float)(cx + HW),(float)(cy + HH) },
@@ -41,23 +42,25 @@ bool draw_arrow(int cx, int cy, bool left, Vector2 mouse) {
         DrawTriangle({ (float)(cx - HW),(float)(cy + HH) },
             { (float)(cx - HW),(float)(cy - HH) },
             { (float)(cx + HW),(float)cy }, col);
-    return hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+    return hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
 }
 
 void draw_mode_switcher(AppState& state, Vector2 mouse) {
+    const Theme& th = g_theme;
     const char* mname = mode_name(state.mode);
     int nw = MeasureText(mname, 17);
     int bar_w = nw + 130;
     int bar_x = CX() - bar_w / 2;
-    // Barra justo debajo del toolbar
     int bar_y = UI_TOP() + 10;
     int bar_h = 36;
 
-    DrawRectangle(bar_x, bar_y, bar_w, bar_h, { 20,20,35,230 });
-    DrawRectangleLines(bar_x, bar_y, bar_w, bar_h, { 80,80,130,255 });
-    DrawLine(bar_x + 50, bar_y + 6, bar_x + 50, bar_y + bar_h - 6, { 70,70,110,200 });
-    DrawLine(bar_x + bar_w - 50, bar_y + 6, bar_x + bar_w - 50, bar_y + bar_h - 6, { 70,70,110,200 });
-    DrawText(mname, CX() - nw / 2, bar_y + 10, 17, WHITE);
+    DrawRectangle(bar_x, bar_y, bar_w, bar_h, th_alpha(th.ctrl_bg));
+    DrawRectangleLines(bar_x, bar_y, bar_w, bar_h, th.ctrl_border);
+    DrawLine(bar_x + 50, bar_y + 6, bar_x + 50, bar_y + bar_h - 6,
+        th_alpha(th.ctrl_text_dim));
+    DrawLine(bar_x + bar_w - 50, bar_y + 6, bar_x + bar_w - 50, bar_y + bar_h - 6,
+        th_alpha(th.ctrl_text_dim));
+    DrawText(mname, CX() - nw / 2, bar_y + 10, 17, th.ctrl_text);
 
     if (draw_arrow(bar_x + 25, bar_y + bar_h / 2, true, mouse))
         state.mode = mode_prev(state.mode);
@@ -66,24 +69,24 @@ void draw_mode_switcher(AppState& state, Vector2 mouse) {
 }
 
 static void draw_zoom_buttons(Camera2D& cam, Vector2 mouse) {
-    int bx = 14;
-    // Botones encima del divisor, dentro de la zona util
-    int by = g_split_y - 86;
-    int bw = 36, bh = 36;
+    const Theme& th = g_theme;
+    const int bx = 14;
+    const int by = g_split_y - 86;
+    const int bw = 36, bh = 36;
 
-    Rectangle r_plus = { (float)bx, (float)by,      (float)bw, (float)bh };
-    Rectangle r_minus = { (float)bx, (float)(by + 42),  (float)bw, (float)bh };
+    Rectangle r_plus = { (float)bx, (float)by,       (float)bw, (float)bh };
+    Rectangle r_minus = { (float)bx, (float)(by + 42), (float)bw, (float)bh };
 
     bool hp = CheckCollisionPointRec(mouse, r_plus);
     bool hm = CheckCollisionPointRec(mouse, r_minus);
 
-    DrawRectangleRec(r_plus, hp ? Color{ 60,60,100,255 } : Color{ 28,28,48,220 });
-    DrawRectangleLinesEx(r_plus, 1, { 80,80,130,255 });
-    DrawText("+", bx + 11, by + 8, 18, hp ? WHITE : Color{ 180,180,210,220 });
+    DrawRectangleRec(r_plus, hp ? th.ctrl_bg_hover : th_alpha(th.ctrl_bg));
+    DrawRectangleLinesEx(r_plus, 1, th.ctrl_border);
+    DrawText("+", bx + 11, by + 8, 18, hp ? th.ctrl_text : th_alpha(th.ctrl_text_dim));
 
-    DrawRectangleRec(r_minus, hm ? Color{ 60,60,100,255 } : Color{ 28,28,48,220 });
-    DrawRectangleLinesEx(r_minus, 1, { 80,80,130,255 });
-    DrawText("-", bx + 13, by + 50, 18, hm ? WHITE : Color{ 180,180,210,220 });
+    DrawRectangleRec(r_minus, hm ? th.ctrl_bg_hover : th_alpha(th.ctrl_bg));
+    DrawRectangleLinesEx(r_minus, 1, th.ctrl_border);
+    DrawText("-", bx + 13, by + 50, 18, hm ? th.ctrl_text : th_alpha(th.ctrl_text_dim));
 
     if (hp && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
         cam.zoom = Clamp(cam.zoom + 0.15f, 0.05f, 5.0f);
@@ -93,7 +96,8 @@ static void draw_zoom_buttons(Camera2D& cam, Vector2 mouse) {
     char zbuf[16];
     snprintf(zbuf, sizeof(zbuf), "%.0f%%", cam.zoom * 100.0f);
     int tw = MeasureText(zbuf, 11);
-    DrawText(zbuf, bx + bw / 2 - tw / 2, by + bh * 2 + 10, 11, { 120,120,160,200 });
+    DrawText(zbuf, bx + bw / 2 - tw / 2, by + bh * 2 + 10, 11,
+        th_alpha(th.ctrl_text_dim));
 }
 
 static std::string short_label(const std::string& label, float radius) {
@@ -109,12 +113,10 @@ static void draw_bubble_sprite(AppState& state, const std::string& key,
     if (key.empty()) return;
     Texture2D tex = state.textures.get(key);
     if (tex.id == 0) return;
-
     float size = radius * 1.4f;
     float scale = size / (float)std::max(tex.width, tex.height);
     float dw = tex.width * scale;
     float dh = tex.height * scale;
-
     DrawTexturePro(tex,
         { 0, 0, (float)tex.width, (float)tex.height },
         { cx - dw * 0.5f, cy - dh * 0.5f, dw, dh },
@@ -122,9 +124,9 @@ static void draw_bubble_sprite(AppState& state, const std::string& key,
 }
 
 void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
+    const Theme& th = g_theme;
     MathNode* cur = state.current();
 
-    // La zona interactiva del canvas va de UI_TOP() a g_split_y
     bool in_canvas = mouse.x < CANVAS_W()
         && mouse.y >= UI_TOP()
         && mouse.y < g_split_y;
@@ -136,14 +138,14 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
         if (!over_bubble) {
             for (const auto& child : cur->children) {
                 float dx = wm.x - child->x, dy = wm.y - child->y;
-                if (dx * dx + dy * dy < child->radius * child->radius) {
+                if (dx * dx + dy * dy < child->radius * child->radius)
+                {
                     over_bubble = true; break;
                 }
             }
         }
     }
 
-    // Pan
     if (in_canvas) {
         bool pan = (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && !over_bubble)
             || IsMouseButtonDown(MOUSE_BUTTON_MIDDLE);
@@ -154,7 +156,6 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
         }
     }
 
-    // Zoom rueda
     float wheel = GetMouseWheelMove();
     if (wheel != 0.0f && in_canvas) {
         cam.offset = mouse;
@@ -162,13 +163,12 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
         cam.zoom = Clamp(cam.zoom + wheel * 0.1f, 0.05f, 5.0f);
     }
 
-    // El offset de la camara se centra en la zona util (no en toda la ventana)
     cam.offset = { (float)CX(), (float)CY() };
 
-    // Scissor: solo la zona util (debajo del toolbar, encima del divisor)
     BeginScissorMode(0, UI_TOP(), CANVAS_W(), TOP_H());
     BeginMode2D(cam);
 
+    // Líneas de conexión
     if (cur && !cur->children.empty()) {
         for (const auto& child : cur->children) {
             float len = sqrtf(child->x * child->x + child->y * child->y);
@@ -176,15 +176,16 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
             float nx = child->x / len, ny = child->y / len;
             DrawLineEx({ nx * 180.0f, ny * 180.0f },
                 { child->x - nx * child->radius, child->y - ny * child->radius },
-                1.0f, Fade(child->color, 0.30f));
+                1.0f, th_fade(child->color, th.bubble_line_alpha));
         }
     }
 
     // Burbuja central
     Color center_col = (cur && cur->code != "ROOT")
-        ? Fade(cur->color, 0.20f) : Color{ 228,228,240,255 };
+        ? th_fade(cur->color, th.bubble_center_alpha)
+        : th.bubble_center_flat;
     DrawCircle(0, 0, 178, center_col);
-    DrawCircleLines(0, 0, 178, { 170,170,200,255 });
+    DrawCircleLines(0, 0, 178, th.bubble_ring);
 
     if (cur && !cur->texture_key.empty())
         draw_bubble_sprite(state, cur->texture_key, 0.0f, 0.0f, 170.0f);
@@ -195,8 +196,9 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
     if ((int)cl_str.size() > 18) cl_str = cl_str.substr(0, 17) + ".";
     int clw = MeasureText(cl_str.c_str(), 20);
     int label_y = (cur && !cur->texture_key.empty()) ? 140 : -10;
-    DrawText(cl_str.c_str(), -clw / 2, label_y, 20, { 25,25,50,255 });
+    DrawText(cl_str.c_str(), -clw / 2, label_y, 20, th.bubble_label_center);
 
+    // Burbujas hijas
     if (cur && !cur->children.empty()) {
         Vector2 wm = GetScreenToWorld2D(mouse, cam);
         for (const auto& child : cur->children) {
@@ -204,15 +206,17 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
             bool hovered = (dx * dx + dy * dy) < (child->radius * child->radius)
                 && in_canvas;
 
-            DrawCircleV({ child->x,child->y }, child->radius + 2, Fade(child->color, 0.18f));
-            DrawCircleV({ child->x,child->y }, child->radius, child->color);
+            DrawCircleV({ child->x, child->y }, child->radius + 2,
+                th_fade(child->color, th.bubble_glow_alpha));
+            DrawCircleV({ child->x, child->y }, child->radius, child->color);
 
             if (!child->texture_key.empty())
                 draw_bubble_sprite(state, child->texture_key,
                     child->x, child->y, child->radius);
 
             if (hovered) {
-                DrawCircleLinesV({ child->x,child->y }, child->radius + 5, WHITE);
+                DrawCircleLinesV({ child->x, child->y }, child->radius + 5,
+                    th.bubble_hover_ring);
                 if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                     state.selected_code = child->code;
                     state.selected_label = child->label;
@@ -225,14 +229,14 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
             int loff = (!child->texture_key.empty()) ? (int)(child->radius * 0.55f) : -5;
             DrawText(lbl.c_str(),
                 (int)(child->x - tw * 0.5f),
-                (int)(child->y + loff), 10, BLACK);
+                (int)(child->y + loff), 10, th.bubble_label_child);
         }
     }
 
     if (!cur || cur->children.empty()) {
         const char* msg = cur ? "Sin sub-areas" : "Datos no cargados";
         int tw = MeasureText(msg, 14);
-        DrawText(msg, -tw / 2, 210, 14, { 90,90,110,255 });
+        DrawText(msg, -tw / 2, 210, 14, th.bubble_empty_msg);
     }
 
     EndMode2D();
@@ -240,13 +244,14 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
 
     draw_zoom_buttons(cam, mouse);
 
-    // Boton Atras: justo debajo del toolbar
+    // Botón Atrás
     if (state.can_go_back()) {
         Rectangle br = { 14.0f, (float)(UI_TOP() + 56), 88.0f, 28.0f };
         bool bh = CheckCollisionPointRec(mouse, br);
-        DrawRectangleRec(br, bh ? Color{ 55,55,95,255 } : Color{ 28,28,48,220 });
-        DrawRectangleLinesEx(br, 1, { 80,80,130,255 });
-        DrawText("< Atras", 22, UI_TOP() + 63, 13, bh ? WHITE : Color{ 160,160,200,220 });
+        DrawRectangleRec(br, bh ? th.bg_button_hover : th_alpha(th.bg_button));
+        DrawRectangleLinesEx(br, 1, th.ctrl_border);
+        DrawText("< Atras", 22, UI_TOP() + 63, 13,
+            bh ? th.ctrl_text : th_alpha(th.ctrl_text_dim));
         if (bh && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) state.pop();
     }
 }

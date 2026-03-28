@@ -1,4 +1,5 @@
 #include "info_panel.hpp"
+#include "theme.hpp"
 #include "raylib.h"
 #include <algorithm>
 #include <queue>
@@ -72,7 +73,9 @@ static std::shared_ptr<MathNode> find_node_by_code(
         if (n->code.size() < code.size() &&
             code.substr(0, n->code.size()) == n->code &&
             n->code.size() > best_depth)
-        { best = n; best_depth = n->code.size(); }
+        {
+            best = n; best_depth = n->code.size();
+        }
         for (auto& c : n->children) q.push(c);
     }
     return best;
@@ -104,12 +107,16 @@ static std::string tex_to_display(const std::string& tex) {
             while (j < tex.size() && isalpha((unsigned char)tex[j])) j++;
             std::string cmd = tex.substr(i + 1, j - i - 1);
             if (cmd == "section" || cmd == "subsection" || cmd == "subsubsection")
-                { out += "\n\n"; i = j - 1; continue; }
+            {
+                out += "\n\n"; i = j - 1; continue;
+            }
             if (cmd == "textbf" || cmd == "textit" || cmd == "emph" ||
-                cmd == "text"   || cmd == "mathrm")
-                { i = j - 1; continue; }
+                cmd == "text" || cmd == "mathrm")
+            {
+                i = j - 1; continue;
+            }
             if (cmd == "newline" || cmd == "\\") { out += '\n'; i = j - 1; continue; }
-            if (cmd == "item")  { out += "\n  * "; i = j - 1; continue; }
+            if (cmd == "item") { out += "\n  * "; i = j - 1; continue; }
             if (cmd == "begin" || cmd == "end") { i = j - 1; continue; }
             i = j - 1; continue;
         }
@@ -135,10 +142,10 @@ static std::string temp_dir() {
 static std::string wrap_tex(const std::string& raw) {
     if (raw.find("\\documentclass") != std::string::npos) return raw;
     return "\\documentclass[12pt]{article}\n"
-           "\\usepackage{amsmath,amssymb,amsthm}\n"
-           "\\usepackage[margin=1.5cm]{geometry}\n"
-           "\\pagestyle{empty}\n"
-           "\\begin{document}\n" + raw + "\n\\end{document}\n";
+        "\\usepackage{amsmath,amssymb,amsthm}\n"
+        "\\usepackage[margin=1.5cm]{geometry}\n"
+        "\\pagestyle{empty}\n"
+        "\\begin{document}\n" + raw + "\n\\end{document}\n";
 }
 
 static void launch_latex_render(AppState& state, const std::string& code,
@@ -149,14 +156,14 @@ static void launch_latex_render(AppState& state, const std::string& code,
     job.tex_code = code; job.state = LatexRenderState::Compiling;
     job.error_msg.clear(); job.thread_done = false;
 
-    std::string td       = temp_dir();
-    std::string src      = td + "entry.tex";
-    std::string png_out  = td + "entry";
-    job.png_path         = td + "entry-1.png";
+    std::string td = temp_dir();
+    std::string src = td + "entry.tex";
+    std::string png_out = td + "entry";
+    job.png_path = td + "entry-1.png";
 
-    std::string latex_exe    = state.toolbar.latex_path;
+    std::string latex_exe = state.toolbar.latex_path;
     std::string pdftoppm_exe = state.toolbar.pdftoppm_path;
-    std::string wrapped      = wrap_tex(raw_tex);
+    std::string wrapped = wrap_tex(raw_tex);
 
     std::thread([=, &job]() {
         try {
@@ -167,16 +174,17 @@ static void launch_latex_render(AppState& state, const std::string& code,
             std::system(("\"" + pdftoppm_exe + "\" -r 144 -png \"" + td + "entry.pdf\" \"" + png_out + "\" > nul 2>&1").c_str());
             if (!fs::exists(job.png_path)) { job.error_msg = "pdftoppm no genero el PNG. Verifica la ruta en Ubicaciones."; job.state = LatexRenderState::Failed; job.thread_done = true; return; }
             job.state = LatexRenderState::Ready;
-        } catch (std::exception& e) { job.error_msg = e.what(); job.state = LatexRenderState::Failed; }
+        }
+        catch (std::exception& e) { job.error_msg = e.what(); job.state = LatexRenderState::Failed; }
         job.thread_done = true;
-    }).detach();
+        }).detach();
 }
 
 static void poll_latex_render(AppState& state) {
     auto& job = state.latex_render;
     if (job.state == LatexRenderState::Ready && job.thread_done && !job.tex_loaded) {
         if (fs::exists(job.png_path)) {
-            job.texture   = LoadTexture(job.png_path.c_str());
+            job.texture = LoadTexture(job.png_path.c_str());
             job.tex_loaded = (job.texture.id != 0);
             if (!job.tex_loaded) job.error_msg = "LoadTexture fallo: " + job.png_path;
         }
@@ -192,7 +200,7 @@ static int draw_latex_widget(AppState& state, int x, int y, int max_w, int max_h
         DrawText(msg.c_str(), x, y, 12, { 120,180,120,200 });
         float bar_w = 180.0f, fill = (float)(fmod(t * 0.5, 1.0)) * bar_w;
         DrawRectangle(x, y + 18, (int)bar_w, 4, { 30,30,50,200 });
-        DrawRectangle(x, y + 18, (int)fill,  4, { 80,160,80,255 });
+        DrawRectangle(x, y + 18, (int)fill, 4, { 80,160,80,255 });
         return y + 30;
     }
     if (job.state == LatexRenderState::Failed) {
@@ -207,7 +215,7 @@ static int draw_latex_widget(AppState& state, int x, int y, int max_w, int max_h
         float scale = std::min({ (float)max_w / tex.width, (float)max_h / tex.height, 1.0f });
         int dw = (int)(tex.width * scale), dh = (int)(tex.height * scale);
         DrawRectangle(x - 2, y - 2, dw + 4, dh + 4, { 20,25,40,255 });
-        DrawRectangleLinesEx({ (float)(x-2),(float)(y-2),(float)(dw+4),(float)(dh+4) }, 1.0f, { 60,80,140,220 });
+        DrawRectangleLinesEx({ (float)(x - 2),(float)(y - 2),(float)(dw + 4),(float)(dh + 4) }, 1.0f, { 60,80,140,220 });
         DrawTexturePro(tex, { 0,0,(float)tex.width,(float)tex.height },
             { (float)x,(float)y,(float)dw,(float)dh }, { 0,0 }, 0.0f, WHITE);
         return y + dh + 8;
@@ -233,7 +241,9 @@ static std::vector<MathlibHit> find_mathlib_hits(
             if (mc == code ||
                 (mc.size() >= code.size() && mc.substr(0, code.size()) == code) ||
                 (code.size() >= mc.size() && code.substr(0, mc.size()) == mc))
-            { hits.push_back({ mod, use_msc ? "MSC" : "STD", mc }); break; }
+            {
+                hits.push_back({ mod, use_msc ? "MSC" : "STD", mc }); break;
+            }
         }
     }
     return hits;
@@ -245,13 +255,17 @@ static void collect_active_codes(AppState& state, MathNode* sel,
     auto try_node = [&](MathNode* node) -> bool {
         if (!node) return false;
         if (!node->msc_refs.empty() || !node->standard_refs.empty())
-            { out_msc = node->msc_refs; out_std = node->standard_refs; return true; }
+        {
+            out_msc = node->msc_refs; out_std = node->standard_refs; return true;
+        }
         auto it = state.crossref_map.find(node->code);
         if (it != state.crossref_map.end() &&
             (!it->second.msc.empty() || !it->second.standard.empty()))
-            { out_msc = it->second.msc; out_std = it->second.standard; return true; }
+        {
+            out_msc = it->second.msc; out_std = it->second.standard; return true;
+        }
         return false;
-    };
+        };
     bool found = try_node(sel);
     for (int i = (int)state.nav_stack.size() - 1; i >= 0 && !found; i--)
         found = try_node(state.nav_stack[i].get());
@@ -265,9 +279,11 @@ static void collect_active_codes(AppState& state, MathNode* sel,
             if (cand.empty()) continue;
             for (auto& [key, ref] : state.crossref_map) {
                 bool match = (key.size() >= cand.size() && key.substr(0, cand.size()) == cand) ||
-                             (cand.size() >= key.size() && cand.substr(0, key.size()) == key);
+                    (cand.size() >= key.size() && cand.substr(0, key.size()) == key);
                 if (match && (!ref.msc.empty() || !ref.standard.empty()))
-                    { out_msc = ref.msc; out_std = ref.standard; found = true; break; }
+                {
+                    out_msc = ref.msc; out_std = ref.standard; found = true; break;
+                }
             }
             if (found) break;
         }
@@ -336,11 +352,11 @@ static void draw_panel_header(AppState& state, int top, int w) {
     int chip_w = MeasureText(state.selected_code.c_str(), 11) + 22;
     draw_chip(level_str, px + chip_w, top + 52, { 28,28,45,220 }, { 130,130,170,255 });
 
-    const char* mode_badge = state.mode == ViewMode::Mathlib  ? "MATHLIB"  :
-                             state.mode == ViewMode::Standard ? "ESTANDAR" : "MSC2020";
-    Color mode_col         = state.mode == ViewMode::Mathlib  ? Color{ 100,220,130,255 } :
-                             state.mode == ViewMode::Standard ? Color{ 255,200,100,255 } :
-                                                                Color{ 100,190,255,255 };
+    const char* mode_badge = state.mode == ViewMode::Mathlib ? "MATHLIB" :
+        state.mode == ViewMode::Standard ? "ESTANDAR" : "MSC2020";
+    Color mode_col = state.mode == ViewMode::Mathlib ? Color{ 100,220,130,255 } :
+        state.mode == ViewMode::Standard ? Color{ 255,200,100,255 } :
+        Color{ 100,190,255,255 };
     draw_chip(mode_badge, px + chip_w + MeasureText(level_str, 11) + 30,
         top + 52, { 20,20,35,220 }, mode_col);
 }
@@ -356,7 +372,7 @@ static void draw_sprite_preview(AppState& state, MathNode* node, int x, int y, i
     DrawRectangle(x, y, size, size, { 10,10,20,200 });
     DrawRectangleLinesEx({ (float)x,(float)y,(float)size,(float)size }, 1, { 60,60,100,180 });
     DrawTexturePro(tex, { 0,0,(float)tex.width,(float)tex.height },
-        { (float)(x + (size-dw)/2),(float)(y + (size-dh)/2),(float)dw,(float)dh },
+        { (float)(x + (size - dw) / 2),(float)(y + (size - dh) / 2),(float)dw,(float)dh },
         { 0,0 }, 0.0f, WHITE);
 }
 
@@ -373,13 +389,14 @@ static int draw_description_block(AppState& state, MathNode* sel,
     if (!has_tex) {
         std::string desc = (sel && !sel->note.empty()) ? sel->note : default_description(sel);
         y = draw_wrapped_text(desc.c_str(), x, y, w / 2 - 30, 13, { 190,195,215,255 });
-    } else {
+    }
+    else {
         draw_chip(".tex", x, y, { 25,50,25,200 }, { 80,200,100,255 });
 
         auto& job = state.latex_render;
-        bool can_render = (job.state == LatexRenderState::Idle   ||
-                           job.state == LatexRenderState::Failed ||
-                           job.state == LatexRenderState::Ready);
+        bool can_render = (job.state == LatexRenderState::Idle ||
+            job.state == LatexRenderState::Failed ||
+            job.state == LatexRenderState::Ready);
         const char* render_label = (job.state == LatexRenderState::Ready && job.tex_loaded)
             ? "Re-render LaTeX" : "Render LaTeX";
         int btn_x = x + MeasureText(".tex", 11) + 22;
@@ -396,9 +413,9 @@ static int draw_description_block(AppState& state, MathNode* sel,
         y += 24;
 
         if (job.tex_code == tex_target &&
-            (job.state == LatexRenderState::Ready    ||
-             job.state == LatexRenderState::Compiling ||
-             job.state == LatexRenderState::Failed))
+            (job.state == LatexRenderState::Ready ||
+                job.state == LatexRenderState::Compiling ||
+                job.state == LatexRenderState::Failed))
         {
             y = draw_latex_widget(state, x, y, w - 20, scroll_h - 60);
             y += 10;
@@ -458,13 +475,14 @@ static int draw_inverse_block(AppState& state, MathNode* sel,
         DrawText("Agrega entradas en crossref.json con los codigos de este nodo.",
             col, y + 16, 10, { 65,75,95,180 });
         y += 42;
-    } else {
+    }
+    else {
         const int ch = 64;
         int shown = std::min((int)hits.size(), 9);
         for (int i = 0; i < shown; i++)
             draw_mathlib_hit_card(state, hits[i],
                 col + (i % 3) * (card_w + 10),
-                y   + (i / 3) * (ch + 8),
+                y + (i / 3) * (ch + 8),
                 card_w, ch, mouse);
         y += ((shown + 2) / 3) * (ch + 8) + 4;
         if ((int)hits.size() > shown) {
@@ -552,7 +570,7 @@ static void draw_resource_card(int rx, int ry, int cw, int ch,
     int tw = MeasureText(style.tag, 9);
     DrawRectangle(rx + cw - tw - 12, ry + 6, tw + 10, 16, { style.kc.r,style.kc.g,style.kc.b,40 });
     DrawText(style.tag, rx + cw - tw - 7, ry + 8, 9, style.kc);
-    DrawText(title,    rx + 10, ry + 10, 13, { 210,215,230,255 });
+    DrawText(title, rx + 10, ry + 10, 13, { 210,215,230,255 });
     DrawText(subtitle, rx + 10, ry + 30, 11, { 110,115,145,200 });
     clicked = hov && clickable && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
 }
@@ -567,7 +585,7 @@ static int draw_resources_block(AppState& state, MathNode* sel,
 
     if (!has_res) {
         // Placeholders grises
-        struct Ph { const char* tag, *title, *desc; Color kc; } ph[] = {
+        struct Ph { const char* tag, * title, * desc; Color kc; } ph[] = {
             {"LIBRO","Introduction",   "Texto introductorio",    {200,140,40,255}},
             {"WEB",  "MathSciNet",     "mathscinet.ams.org",     {60,150,220,255}},
             {"NOTA", "Nota tecnica",   "Descripcion formal",     {140,140,200,255}},
@@ -581,12 +599,13 @@ static int draw_resources_block(AppState& state, MathNode* sel,
             DrawRectangleLinesEx({ (float)rx,(float)ry,(float)card_w,(float)card_h }, 1, { 38,38,62,180 });
             int tw = MeasureText(ph[i].tag, 9);
             DrawRectangle(rx + card_w - tw - 12, ry + 6, tw + 10, 16, { ph[i].kc.r,ph[i].kc.g,ph[i].kc.b,40 });
-            DrawText(ph[i].tag,   rx + card_w - tw - 7, ry + 8,  9, ph[i].kc);
+            DrawText(ph[i].tag, rx + card_w - tw - 7, ry + 8, 9, ph[i].kc);
             DrawText(ph[i].title, rx + 10, ry + 10, 13, { 210,215,230,255 });
-            DrawText(ph[i].desc,  rx + 10, ry + 30, 11, { 110,115,145,200 });
+            DrawText(ph[i].desc, rx + 10, ry + 30, 11, { 110,115,145,200 });
         }
         y += 2 * (card_h + 10) + 10;
-    } else {
+    }
+    else {
         int total = (int)resources->size();
         for (int i = 0; i < total; i++) {
             auto& res = (*resources)[i];
@@ -662,8 +681,8 @@ void draw_info_panel(AppState& state, Vector2 mouse) {
     static std::string cached_code, cached_raw, cached_display;
     std::string tex_target = sel ? sel->code : get_context_code(state, nullptr);
     if (tex_target != cached_code) {
-        cached_code    = tex_target;
-        cached_raw     = load_entry_tex(state.toolbar.entries_path, tex_target);
+        cached_code = tex_target;
+        cached_raw = load_entry_tex(state.toolbar.entries_path, tex_target);
         cached_display = cached_raw.empty() ? "" : tex_to_display(cached_raw);
         auto& job = state.latex_render;
         if (job.tex_code != tex_target) {
@@ -673,7 +692,7 @@ void draw_info_panel(AppState& state, Vector2 mouse) {
     }
 
     // Layout
-    const int col    = 18;
+    const int col = 18;
     const int card_w = (w - col * 2 - 10 * 2) / 3;
     const int card_h = 68;
 
@@ -683,7 +702,7 @@ void draw_info_panel(AppState& state, Vector2 mouse) {
     draw_sprite_preview(state, sel, w - 56 - col, y, 56);
 
     y = draw_description_block(state, sel, tex_target, cached_raw, cached_display,
-            mouse, col, y, w - col * 2, scroll_h);
+        mouse, col, y, w - col * 2, scroll_h);
 
     y += 14;
     DrawLine(col, y, w - col, y, { 30,30,50,200 }); y += 14;
@@ -707,7 +726,7 @@ void draw_info_panel(AppState& state, Vector2 mouse) {
         float ratio = (float)scroll_h / full_h;
         float bar_h = std::max(24.0f, ratio * scroll_h);
         float max_sv = (float)(full_h - scroll_h);
-        float bar_y  = scroll_top + (state.resource_scroll / max_sv) * (scroll_h - bar_h);
+        float bar_y = scroll_top + (state.resource_scroll / max_sv) * (scroll_h - bar_h);
         DrawRectangle(w - 6, scroll_top, 4, scroll_h, { 18,18,32,200 });
         DrawRectangle(w - 6, (int)bar_y, 4, (int)bar_h, { 70,70,120,255 });
     }

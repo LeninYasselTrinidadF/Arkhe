@@ -21,42 +21,44 @@ struct CamState {
 };
 
 // ── Estado del toolbar ────────────────────────────────────────────────────────
-// Tres tabs principales estilo VS Code: Ubicaciones | Documentacion | Editor
 enum class ToolbarTab { None, Ubicaciones, Docs, Editor };
 
 struct ToolbarState {
-    ToolbarTab active_tab       = ToolbarTab::None;
+    ToolbarTab active_tab = ToolbarTab::None;
 
     // Rutas independientes
-    char assets_path[512]       = "assets/";
-    char entries_path[512]      = "assets/entries/";
-    char graphics_path[512]     = "assets/graphics/";
-    char latex_path[512]        = "C:/texlive/2025/bin/windows/pdflatex.exe";
-    char pdftoppm_path[512]     = "C:/texlive/2025/bin/windows/pdftoppm.exe";
+    char assets_path[512] = "assets/";
+    char entries_path[512] = "assets/entries/";
+    char graphics_path[512] = "assets/graphics/";
+    char latex_path[512] = "C:/texlive/2025/bin/windows/pdflatex.exe";
+    char pdftoppm_path[512] = "C:/texlive/2025/bin/windows/pdftoppm.exe";
 
     // Flags de activacion
-    bool assets_changed         = false;
+    bool assets_changed = false;
 
     // Cual campo de texto esta activo en el panel Ubicaciones
-    int  active_field           = -1;   // 0=assets 1=entries 2=graphics 3=latex 4=pdftoppm
+    int  active_field = -1;
 
-    // Paneles flotantes (retrocompatibilidad)
-    bool docs_open              = false;
-    bool editor_open            = false;
-    bool ubicaciones_open       = false;
+    // Paneles flotantes
+    bool docs_open = false;
+    bool editor_open = false;
+    bool ubicaciones_open = false;
+
+    // ── Tema visual ───────────────────────────────────────────────────────────
+    // 0=Dark  1=Light  2=Bocchi  3=ChainsawMan  4=Generic
+    int  theme_id = 0;
 };
 
 // ── Estado de render LaTeX ────────────────────────────────────────────────────
-// Se compila async: pdflatex → pdftoppm → Texture2D
 enum class LatexRenderState { Idle, Compiling, Ready, Failed };
 
 struct LatexRenderJob {
-    std::string         tex_code;       // codigo del nodo que origino el render
-    std::string         tex_path;       // ruta al .tex fuente
-    std::string         png_path;       // ruta al PNG generado (temp)
-    LatexRenderState    state    = LatexRenderState::Idle;
+    std::string         tex_code;
+    std::string         tex_path;
+    std::string         png_path;
+    LatexRenderState    state = LatexRenderState::Idle;
     std::string         error_msg;
-    Texture2D           texture  = {};
+    Texture2D           texture = {};
     bool                tex_loaded = false;
     std::atomic<bool>   thread_done{ false };
 };
@@ -84,16 +86,10 @@ struct AppState {
     std::unordered_map<std::string, CrossRef> crossref_map;
     std::unordered_map<std::string, CamState> cam_memory;
 
-    // ── Sistema de texturas/sprites ───────────────────────────────────────────
     TextureCache textures;
-
-    // ── Estado del toolbar ────────────────────────────────────────────────────
     ToolbarState toolbar;
-
-    // ── Render LaTeX (info_panel) ─────────────────────────────────────────────
     LatexRenderJob latex_render;
 
-    // ── Navegacion diferida ───────────────────────────────────────────────────
     struct PendingNav {
         bool        active = false;
         ViewMode    mode = ViewMode::MSC2020;
