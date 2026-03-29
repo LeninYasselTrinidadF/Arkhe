@@ -1,5 +1,6 @@
 #pragma once
-#include "panel_widget.hpp"
+#include "../widgets/panel_widget.hpp"
+#include "../constants.hpp"
 #include <vector>
 #include <string>
 #include <unordered_map>
@@ -58,7 +59,11 @@ class EntryEditor : public PanelWidget {
     enum FieldId { F_NOTE = 0, F_TEX = 1, F_MSC = 2, F_KIND = 10, F_TITLE = 11, F_CONTENT = 12 };
 
 public:
-    explicit EntryEditor(AppState& s) : PanelWidget(s) { load_entries_index(); }
+    explicit EntryEditor(AppState& s) : PanelWidget(s) {
+        // Posición inicial: derecha de la pantalla (se ajusta en draw con SW())
+        pos_x = -1; pos_y = TOOLBAR_H;  // -1 = no inicializado, se calcula en primer draw
+        load_entries_index();
+    }
     void draw(Vector2 mouse) override;
 };
 

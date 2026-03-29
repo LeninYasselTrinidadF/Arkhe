@@ -1,9 +1,9 @@
 #include "search_panel.hpp"
-#include "overlay.hpp"   // ← guarda de clicks
+#include "../core/overlay.hpp"   // ← guarda de clicks
 #include "../search/loogle.hpp"
-#include "nine_patch.hpp"
-#include "skin.hpp"
-#include "theme.hpp"
+#include "../core/nine_patch.hpp"
+#include "../core/skin.hpp"
+#include "../core/theme.hpp"
 #include "raylib.h"
 #include <cstring>
 #include <algorithm>

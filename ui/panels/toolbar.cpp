@@ -2,12 +2,12 @@
 #include "ubicaciones_panel.hpp"
 #include "docs_panel.hpp"
 #include "entry_editor.hpp"
-#include "font_panel.hpp"      // ← nuevo
-#include "font_manager.hpp"    // ← para DrawTextF en toolbar
-#include "theme.hpp"
-#include "nine_patch.hpp"
-#include "skin.hpp"
-#include "constants.hpp"
+#include "config_panel.hpp"      // ← nuevo
+#include "../core/font_manager.hpp"    // ← para DrawTextF en toolbar
+#include "../core/theme.hpp"
+#include "../core/nine_patch.hpp"
+#include "../core/skin.hpp"
+#include "../constants.hpp"
 #include "raylib.h"
 
 static void draw_separator(int x) {
@@ -51,13 +51,13 @@ static bool draw_theme_button(int x, int y, int h, Vector2 mouse) {
 static UbicacionesPanel* s_ubicaciones = nullptr;
 static DocsPanel*        s_docs        = nullptr;
 static EntryEditor*      s_editor      = nullptr;
-static FontPanel*        s_font        = nullptr;
+static ConfigPanel*      s_config      = nullptr;
 
 static void ensure_panels(AppState& state) {
     if (!s_ubicaciones) s_ubicaciones = new UbicacionesPanel(state);
     if (!s_docs)        s_docs        = new DocsPanel(state);
     if (!s_editor)      s_editor      = new EntryEditor(state);
-    if (!s_font)        s_font        = new FontPanel(state);
+    if (!s_config)      s_config      = new ConfigPanel(state);
 }
 
 bool draw_toolbar(AppState& state, Vector2 mouse) {
@@ -84,7 +84,7 @@ bool draw_toolbar(AppState& state, Vector2 mouse) {
         { "Ubicaciones", ToolbarTab::Ubicaciones, &state.toolbar.ubicaciones_open },
         { "Docs",        ToolbarTab::Docs,        &state.toolbar.docs_open        },
         { "Editor",      ToolbarTab::Editor,      &state.toolbar.editor_open      },
-        { "Apariencia",  ToolbarTab::Font,        &state.toolbar.font_panel_open  },
+        { "Config",      ToolbarTab::Config,      &state.toolbar.config_open       },
     };
     for (auto& t : tabs) {
         int bw     = MeasureTextF(t.label, 12) + 24;
@@ -93,7 +93,7 @@ bool draw_toolbar(AppState& state, Vector2 mouse) {
             bool was = *t.flag;
             // Cerrar todos
             state.toolbar.ubicaciones_open = state.toolbar.docs_open =
-            state.toolbar.editor_open      = state.toolbar.font_panel_open = false;
+            state.toolbar.editor_open      = state.toolbar.config_open = false;
             if (!was) { *t.flag = true; state.toolbar.active_tab = t.tab; }
             else       state.toolbar.active_tab = ToolbarTab::None;
         }
@@ -130,7 +130,7 @@ bool draw_toolbar(AppState& state, Vector2 mouse) {
     s_ubicaciones->draw(mouse);
     s_docs->draw(mouse);
     s_editor->draw(mouse);
-    s_font->draw(mouse);
+    s_config->draw(mouse);
 
     return state.toolbar.assets_changed;
 }

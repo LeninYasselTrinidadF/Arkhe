@@ -2,17 +2,26 @@
 #include "data/msc_loader.hpp"
 #include "data/mathlib_loader.hpp"
 #include "data/crossref_loader.hpp"
-#include "ui/bubble_view.hpp"
-#include "ui/search_panel.hpp"
-#include "ui/info_panel.hpp"
-#include "ui/toolbar.hpp"
-#include "ui/theme.hpp"
-#include "ui/nine_patch.hpp"
-#include "ui/skin.hpp"
-#include "ui/constants.hpp"
-#include "ui/overlay.hpp"
-#include "ui/font_manager.hpp"
+
+// UI Core
+#include "ui/core/font_manager.hpp"
+#include "ui/core/nine_patch.hpp"
+#include "ui/core/skin.hpp"
+#include "ui/core/theme.hpp"
+
+// UI Info
+#include "ui/info/info_panel.hpp"
+
+// UI Panels
+#include "ui/panels/search_panel.hpp"
+#include "ui/panels/toolbar.hpp"
+
+// UI Raíz / Otros
 #include "ui/bubble_stats.hpp"
+#include "ui/bubble_view.hpp"
+#include "ui/constants.hpp" // Asumiendo que está en core
+#include "ui/core/overlay.hpp"   // Asumiendo que está en core
+
 #include "raylib.h"
 #include "raymath.h"
 #include <cstring>

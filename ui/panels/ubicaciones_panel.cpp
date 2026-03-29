@@ -1,5 +1,5 @@
 #include "ubicaciones_panel.hpp"
-#include "constants.hpp"
+#include "../constants.hpp"
 #include "tinyfiledialogs.h"
 #include <cstring>
 
@@ -30,7 +30,7 @@ static void browse_file(char* buf, int buf_len, const char* title) {
 void UbicacionesPanel::draw(Vector2 mouse) {
     if (!state.toolbar.ubicaciones_open) return;
 
-    if (draw_window_frame(PX, PY, PW, PH,
+    if (draw_window_frame(PW, PH,
         "UBICACIONES", { 120, 160, 255, 255 },
         { 50, 80, 160, 220 }, mouse))
     {
@@ -39,7 +39,7 @@ void UbicacionesPanel::draw(Vector2 mouse) {
     }
 
     auto& tb = state.toolbar;
-    const int lx = PX + 16;
+    const int lx = pos_x + 16;
     const int field_w = PW - 200;  // deja espacio para label + botón
     const int label_w = 130;
     const int btn_w = 36;
@@ -63,7 +63,7 @@ void UbicacionesPanel::draw(Vector2 mouse) {
         { "pdftoppm.exe",     "Seleccionar pdftoppm",           tb.pdftoppm_path, 512, 4, true  },
     };
 
-    int y = PY + 40;
+    int y = pos_y + 40;
     bool any_confirmed = false;
 
     for (auto& row : rows) {
@@ -95,9 +95,9 @@ void UbicacionesPanel::draw(Vector2 mouse) {
     }
 
     // Botón Aplicar
-    const int apply_y = PY + PH - 42;
-    draw_h_line(lx, apply_y, PX + PW - lx);
-    Rectangle apply_r = { (float)(PX + PW - 110), (float)(apply_y + 8), 94.0f, 26.0f };
+    const int apply_y = pos_y + PH - 42;
+    draw_h_line(lx, apply_y, pos_x + PW - lx);
+    Rectangle apply_r = { (float)(pos_x + PW - 110), (float)(apply_y + 8), 94.0f, 26.0f };
     bool ahov = CheckCollisionPointRec(mouse, apply_r);
     DrawRectangleRec(apply_r, ahov ? Color{ 40, 80, 180, 255 } : Color{ 28, 50, 120, 255 });
     DrawRectangleLinesEx(apply_r, 1.0f, { 70, 130, 255, 220 });
@@ -110,7 +110,7 @@ void UbicacionesPanel::draw(Vector2 mouse) {
     }
 
     DrawText("Tip: Enter en cualquier campo o click en Aplicar para recargar.",
-        lx, PY + PH - 12, 9, { 70, 80, 130, 180 });
+        lx, pos_y + PH - 12, 9, { 70, 80, 130, 180 });
 }
 
 void draw_ubicaciones_panel(AppState& state, Vector2 mouse) {

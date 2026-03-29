@@ -1,13 +1,13 @@
 #include "docs_panel.hpp"
-#include "constants.hpp"
+#include "../constants.hpp"
 
 void DocsPanel::draw(Vector2 mouse) {
     if (!state.toolbar.docs_open) return;
 
-    const int pw = 480, ph = 380;
-    const int px = SW() / 2 - pw / 2, py = TOOLBAR_H;
+    
+    
 
-    if (draw_window_frame(px, py, pw, ph,
+    if (draw_window_frame(480, 380,
             "DOCUMENTACION RAPIDA", { 140, 170, 255, 255 },
             { 80, 100, 180, 255 }, mouse))
     {
@@ -16,8 +16,8 @@ void DocsPanel::draw(Vector2 mouse) {
         return;
     }
 
-    const int lx = px + 14, lw = pw - 28;
-    int y = py + 40;
+    const int lx = pos_x + 14, lw = 480 - 28;
+    int y = pos_y + 40;
 
     // ── Modos de vista ────────────────────────────────────────────────────
     DrawText("MODOS DE VISTA", lx, y, 11, { 100, 130, 200, 255 }); y += 18;

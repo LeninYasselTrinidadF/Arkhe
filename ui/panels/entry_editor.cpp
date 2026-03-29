@@ -406,9 +406,11 @@ void EntryEditor::draw_add_resource_form(MathNode* sel, int lx, int lw,
 
 void EntryEditor::draw(Vector2 mouse) {
     if (!state.toolbar.editor_open) return;
+    // Primera apertura: posicionar en la derecha
+    if (pos_x == -1) { pos_x = std::max(0, SW() - 540 - 10); pos_y = TOOLBAR_H; }
 
-    const int pw = 540, ph = 560;
-    const int px = SW() - pw - 10, py = TOOLBAR_H;
+    
+    
 
     // ── Resolver nodo ────────────────────────────────────────────────────────
     MathNode* cur = state.current();
@@ -435,7 +437,7 @@ void EntryEditor::draw(Vector2 mouse) {
     }
 
     // ── Frame principal ───────────────────────────────────────────────────────
-    if (draw_window_frame(px, py, pw, ph,
+    if (draw_window_frame(540, 560,
         "EDITOR DE ENTRADAS", { 130,220,130,255 }, { 80,120,80,255 }, mouse))
     {
         state.toolbar.editor_open = false;
@@ -444,8 +446,8 @@ void EntryEditor::draw(Vector2 mouse) {
         return;
     }
 
-    const int lx = px + 14, lw = pw - 28;
-    int y = py + 38;
+    const int pw=540,ph=560; const int lx = pos_x + 14, lw = pw - 28;
+    int y = pos_y + 38;
 
     if (!sel) {
         DrawText("Selecciona una burbuja para editar.", lx, y + 10, 12, { 120,120,160,200 });
@@ -462,13 +464,13 @@ void EntryEditor::draw(Vector2 mouse) {
 
     draw_node_fields(sel, lx, lw, y, mouse);
     draw_h_line(lx, y, lx + lw); y += 8;
-    draw_body_section(sel, lx, lw, py, ph, y, mouse);
+    draw_body_section(sel, lx, lw, pos_y, ph, y, mouse);
     draw_h_line(lx, y, lx + lw); y += 8;
-    draw_resource_list(sel, lx, lw, ph, py, y, mouse);
-    draw_add_resource_form(sel, lx, lw, ph, py, y, mouse);
+    draw_resource_list(sel, lx, lw, ph, pos_y, y, mouse);
+    draw_add_resource_form(sel, lx, lw, ph, pos_y, y, mouse);
 
     // File manager encima de todo (se dibuja al final)
-    draw_file_manager(sel, px, py, mouse);
+    draw_file_manager(sel, pos_x, pos_y, mouse);
 }
 
 void draw_entry_editor(AppState& state, Vector2 mouse) {

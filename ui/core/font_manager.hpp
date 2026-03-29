@@ -14,18 +14,19 @@
 //
 // El parámetro `size` en DrawTextF/MeasureTextF es un tamaño RELATIVO:
 //   size final = size * (base_size / 14.0f)
-// Así al cambiar base_size toda la UI escala proporcionalmente.
+// Con base_size=21 (default) toda la UI se renderiza a 1.5× el tamaño original.
+// Cambiar base_size en ToolbarState::theme_id o en Config para ajuste global.
 // ─────────────────────────────────────────────────────────────────────────────
 
 struct FontManager {
-    Font    font      = {};
-    bool    loaded    = false;
-    float   base_size = 14.0f;   // tamaño base del usuario (8–32)
+    Font    font = {};
+    bool    loaded = false;
+    float   base_size = 21.0f;   // tamaño base del usuario (8–32) — default 21 = 1.5× original
 
     // Carga la fuente desde path. Genera glifos hasta char 1024 para cubrir
     // símbolos matemáticos básicos del rango Latin Extended.
     // Si falla, loaded=false y las funciones usan la default de raylib.
-    void load(const std::string& path, int atlas_size = 32);
+    void load(const std::string& path, int atlas_size = 48);
 
     // Descarga la fuente de GPU. Llamar antes de CloseWindow().
     void unload();

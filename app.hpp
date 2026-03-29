@@ -1,7 +1,7 @@
 #pragma once
 #include "data/math_node.hpp"
 #include "data/crossref_loader.hpp"
-#include "ui/texture_cache.hpp"
+#include "ui/core/texture_cache.hpp"
 #include <string>
 #include <vector>
 #include <memory>
@@ -21,7 +21,7 @@ struct CamState {
 };
 
 // ── Estado del toolbar ────────────────────────────────────────────────────────
-enum class ToolbarTab { None, Ubicaciones, Docs, Editor, Font };
+enum class ToolbarTab { None, Ubicaciones, Docs, Editor, Config };
 
 struct ToolbarState {
     ToolbarTab active_tab = ToolbarTab::None;
@@ -43,7 +43,7 @@ struct ToolbarState {
     bool docs_open = false;
     bool editor_open = false;
     bool ubicaciones_open = false;
-    bool font_panel_open = false;
+    bool config_open = false;
 
     // ── Tema visual ───────────────────────────────────────────────────────────
     // 0=Dark  1=Light  2=Bocchi  3=ChainsawMan  4=Generic

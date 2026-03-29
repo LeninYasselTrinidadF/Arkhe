@@ -17,33 +17,47 @@ add_executable(Arkhe
     data/msc_loader.cpp
     data/mathlib_loader.cpp
     data/crossref_loader.cpp
-    ui/bubble_view.cpp
-    ui/search_panel.cpp
-    ui/info_panel.cpp
-    ui/info_header.cpp
-    ui/info_description.cpp
-    ui/info_crossrefs.cpp
-    ui/info_resources.cpp
-    ui/toolbar.cpp
-    ui/docs_panel.cpp
-    ui/entry_editor.cpp
-    ui/ubicaciones_panel.cpp
-    ui/font_panel.cpp
-    ui/theme.cpp
-    ui/nine_patch.cpp
-    ui/skin.cpp
-    ui/panel_widget.cpp
-    ui/font_manager.cpp
+
+    # ui/core
+    ui/core/font_manager.cpp
+    ui/core/nine_patch.cpp
+    ui/core/skin.cpp
+    ui/core/theme.cpp
+
+    # ui/info
+    ui/info/info_crossrefs.cpp
+    ui/info/info_description.cpp
+    ui/info/info_header.cpp
+    ui/info/info_panel.cpp
+    ui/info/info_resources.cpp
+
+    # ui/panels
+    ui/panels/config_panel.cpp
+    ui/panels/docs_panel.cpp
+    ui/panels/entry_editor.cpp
+    ui/panels/search_panel.cpp
+    ui/panels/toolbar.cpp
+    ui/panels/ubicaciones_panel.cpp
+
+    # ui/widgets
+    ui/widgets/panel_widget.cpp
+
+    # ui raíz
     ui/bubble_stats.cpp
+    ui/bubble_view.cpp
+    # búsqueda
     search/loogle.cpp
 )
+
 
 target_sources(Arkhe PRIVATE
     vendor/tinyfiledialogs.c
 )
-target_include_directories(Arkhe PRIVATE vendor/)
-target_include_directories(Arkhe PRIVATE ${CMAKE_SOURCE_DIR})
-
+target_include_directories(Arkhe PRIVATE
+    vendor/
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/ui
+)
 target_link_libraries(Arkhe PRIVATE
     raylib
     nlohmann_json::nlohmann_json

@@ -3,10 +3,10 @@
 #include "info_description.hpp"
 #include "info_crossrefs.hpp"
 #include "info_resources.hpp"
-#include "overlay.hpp"
-#include "theme.hpp"
-#include "skin.hpp"
-#include "constants.hpp"
+#include "../core/overlay.hpp"
+#include "../core/theme.hpp"
+#include "../core/skin.hpp"
+#include "../constants.hpp"
 #include "raylib.h"
 
 #include <algorithm>

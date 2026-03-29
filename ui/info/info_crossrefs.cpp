@@ -1,7 +1,7 @@
 #include "info_crossrefs.hpp"
-#include "theme.hpp"
-#include "skin.hpp"
-#include "constants.hpp"
+#include "../core/theme.hpp"
+#include "../core/skin.hpp"
+#include "../constants.hpp"
 
 #include <queue>
 #include <algorithm>
