@@ -22,7 +22,12 @@ struct EditState {
     // ── Metadatos del nodo en edición ─────────────────────────────────────────
     std::string last_code;          ///< code del nodo que se sincronizó por última vez
     std::string tex_file;           ///< filename (sin ruta) del .tex vinculado
-    bool        body_dirty = false; ///< hay cambios sin guardar en body_buf
+    bool        body_dirty    = false; ///< hay cambios sin guardar en body_buf
+
+    // ── Vista previa ──────────────────────────────────────────────────────────
+    /// Cuando true, draw_body_section muestra el preview renderizado en lugar
+    /// de la textarea de edición.
+    bool        preview_mode  = false;
 
     // ── sync ──────────────────────────────────────────────────────────────────
     /// Carga los campos desde `sel` y `body`. Es no-op si el nodo no cambió.
@@ -32,9 +37,10 @@ struct EditState {
     {
         if (!sel || sel->code == last_code) return;
 
-        last_code  = sel->code;
-        tex_file   = fname;
-        body_dirty = false;
+        last_code     = sel->code;
+        tex_file      = fname;
+        body_dirty    = false;
+        preview_mode  = false;          // al cambiar de nodo, volver a edición
 
         strncpy(note_buf, sel->note.c_str(), 511);          note_buf[511]  = '\0';
         strncpy(tex_buf,  sel->texture_key.c_str(), 127);   tex_buf[127]   = '\0';

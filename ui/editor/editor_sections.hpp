@@ -37,8 +37,14 @@ void draw_node_fields(MathNode* sel, EditState& edit,
                       int lx, int lw, int& y, Vector2 mouse);
 
 // ── draw_body_section ─────────────────────────────────────────────────────────
-/// Textarea de LaTeX con scroll, cursor parpadeante y botones
-/// «Importar» (abre el file-manager) y «Guardar» (escribe al disco).
+/// Controla el área del cuerpo LaTeX: botones y dispatch a editor o preview.
+///
+/// · En modo edición (edit.preview_mode == false): muestra la textarea con
+///   scroll y cursor.
+/// · En modo preview (edit.preview_mode == true): llama draw_body_preview.
+///
+/// El botón «Preview» / «Editar» alterna edit.preview_mode.
+/// Los botones «Importar» y «Guardar» son siempre visibles.
 ///
 /// `show_file_manager` y `body_scroll`/`body_active` son estado
 /// del EntryEditor; se pasan por referencia para que la sección los
@@ -51,8 +57,25 @@ void draw_body_section(MathNode* sel, EditState& edit,
                        float& body_scroll,
                        bool&  body_active,
                        bool&  show_file_manager,
-                       /* callbacks para IO */
                        void (*on_save)(MathNode*, EditState&, AppState&, bool&));
+
+// ── draw_body_preview ─────────────────────────────────────────────────────────
+/// Renderiza el contenido de body_buf con texto plano + ecuaciones LaTeX
+/// compiladas (via g_eq_cache).
+///
+/// · Textos normales: DrawTextF con word-wrap por \n.
+/// · InlineMath ($...$): textura compilada, alto máximo = 1 línea de texto.
+/// · DisplayMath ($$...$$): textura compilada centrada, ancho máximo = lw.
+/// · Si la textura aún no está lista: placeholder «Compilando...».
+/// · Si falló: placeholder rojo con símbolo de error.
+///
+/// Llama internamente a g_eq_cache.poll() y g_eq_cache.request().
+void draw_body_preview(MathNode* sel, EditState& edit,
+                       AppState& state,
+                       int lx, int lw,
+                       int py, int ph,
+                       int& y, Vector2 mouse,
+                       float& body_scroll);
 
 // ── draw_file_manager ─────────────────────────────────────────────────────────
 /// Popup flotante de selección de archivos .tex.

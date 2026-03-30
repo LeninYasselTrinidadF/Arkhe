@@ -1,5 +1,7 @@
 #include "editor_sections.hpp"
 #include "editor_io.hpp"
+#include "body_parser.hpp"
+#include "equation_cache.hpp"
 #include "../core/font_manager.hpp"
 #include "../core/theme.hpp"
 #include "../constants.hpp"
@@ -79,6 +81,151 @@ void draw_node_fields(MathNode* sel, EditState& edit,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// draw_body_preview (implementación interna)
+// ─────────────────────────────────────────────────────────────────────────────
+
+void draw_body_preview(MathNode* /*sel*/, EditState& edit,
+                       AppState& state,
+                       int lx, int lw,
+                       int py, int ph,
+                       int& y, Vector2 mouse,
+                       float& body_scroll)
+{
+    // ── 1. Parsear body_buf ───────────────────────────────────────────────────
+    auto segs = parse_body(edit.body_buf);
+
+    // ── 2. Solicitar compilación de ecuaciones únicas ─────────────────────────
+    for (auto& seg : segs)
+        if (seg.type != BodySegment::Type::Text)
+            g_eq_cache.request(seg.content, state);
+
+    // ── 3. Subir texturas terminadas al contexto GL ───────────────────────────
+    g_eq_cache.poll();
+
+    // ── 4. Área de preview ────────────────────────────────────────────────────
+    const int area_h = std::max(60, py + ph - y - 10);
+    Rectangle area_r = { (float)lx, (float)y, (float)lw, (float)area_h };
+
+    DrawRectangleRec(area_r, { 14, 14, 24, 255 });
+    DrawRectangleLinesEx(area_r, 1.0f, { 45, 45, 72, 200 });
+
+    // Scroll con rueda del ratón
+    if (CheckCollisionPointRec(mouse, area_r)) {
+        float wh = GetMouseWheelMove();
+        if (wh != 0.0f) body_scroll -= wh * 17.f * 3.f;
+        if (body_scroll < 0) body_scroll = 0;
+    }
+
+    BeginScissorMode(lx + 1, (int)area_r.y + 1, lw - 2, area_h - 2);
+
+    // ── 5. Render de segmentos ────────────────────────────────────────────────
+    constexpr int FONT_SZ    = 11;
+    constexpr int LINE_H     = FONT_SZ + 3;
+    constexpr int PAD_X      = 6;
+    constexpr int MAX_INLINE_H = 28;  // alto máximo para ecuaciones inline
+
+    int draw_y = (int)area_r.y + 4 - (int)body_scroll;
+    int total_h = 0;   // para clamp de scroll al final
+
+    for (auto& seg : segs) {
+
+        if (seg.type == BodySegment::Type::Text) {
+            // ── Texto plano: split por \n, render línea a línea ───────────────
+            const std::string& txt = seg.content;
+            size_t start = 0;
+            while (start <= txt.size()) {
+                size_t nl = txt.find('\n', start);
+                if (nl == std::string::npos) nl = txt.size();
+                std::string line = txt.substr(start, nl - start);
+
+                if (draw_y + LINE_H > (int)area_r.y &&
+                    draw_y < (int)(area_r.y + area_h))
+                {
+                    DrawTextF(line.c_str(), lx + PAD_X, draw_y,
+                              FONT_SZ, { 200, 210, 220, 210 });
+                }
+                draw_y  += LINE_H;
+                total_h += LINE_H;
+                start    = nl + 1;
+            }
+
+        } else {
+            // ── Ecuación: buscar textura en caché ─────────────────────────────
+            EqEntry* entry = g_eq_cache.get(seg.content);
+            bool is_display = (seg.type == BodySegment::Type::DisplayMath);
+
+            if (entry && entry->loaded) {
+                // Escalar al tamaño destino
+                float scale;
+                if (is_display) {
+                    // DisplayMath: ancho máximo = lw − 2*PAD_X
+                    scale = std::min(1.0f,
+                                     (float)(lw - 2 * PAD_X) / entry->tex.width);
+                } else {
+                    // InlineMath: alto máximo = MAX_INLINE_H
+                    scale = std::min(1.0f,
+                                     (float)MAX_INLINE_H / entry->tex.height);
+                    scale = std::min(scale,
+                                     (float)(lw - 2 * PAD_X) / entry->tex.width);
+                }
+
+                int tw = (int)(entry->tex.width  * scale);
+                int th = (int)(entry->tex.height * scale);
+                int tx = is_display
+                       ? lx + (lw - tw) / 2          // centrado
+                       : lx + PAD_X;                  // alineado a la izquierda
+
+                if (draw_y + th > (int)area_r.y &&
+                    draw_y < (int)(area_r.y + area_h))
+                {
+                    // Fondo blanco para la textura (pdflatex genera fondo blanco)
+                    DrawRectangle(tx - 2, draw_y - 2, tw + 4, th + 4, WHITE);
+                    DrawTextureEx(entry->tex,
+                                  { (float)tx, (float)draw_y },
+                                  0.0f, scale, WHITE);
+                }
+                draw_y  += th + 6;
+                total_h += th + 6;
+
+            } else if (entry && entry->failed) {
+                // Error de compilación
+                if (draw_y + 20 > (int)area_r.y &&
+                    draw_y < (int)(area_r.y + area_h))
+                {
+                    DrawRectangle(lx + PAD_X, draw_y, lw - 2 * PAD_X, 20,
+                                  { 50, 10, 10, 220 });
+                    DrawTextF("! Error LaTeX", lx + PAD_X + 4, draw_y + 4,
+                              10, { 255, 100, 100, 240 });
+                }
+                draw_y  += 24;
+                total_h += 24;
+
+            } else {
+                // Aún compilando
+                if (draw_y + 20 > (int)area_r.y &&
+                    draw_y < (int)(area_r.y + area_h))
+                {
+                    DrawRectangle(lx + PAD_X, draw_y, lw - 2 * PAD_X, 20,
+                                  { 20, 20, 40, 180 });
+                    DrawTextF("Compilando...", lx + PAD_X + 4, draw_y + 4,
+                              10, { 100, 130, 200, 200 });
+                }
+                draw_y  += 24;
+                total_h += 24;
+            }
+        }
+    }
+
+    EndScissorMode();
+
+    // Clamp del scroll
+    float max_scr = (float)std::max(0, total_h - area_h + 8);
+    if (body_scroll > max_scr) body_scroll = max_scr;
+
+    y += area_h + 6;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // draw_body_section
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -105,33 +252,56 @@ void draw_body_section(MathNode* sel, EditState& edit,
                   y, 10, { 80, 150, 200, 200 });
     }
 
-    // ── Botones Importar / Guardar ────────────────────────────────────────────
-    Rectangle imp_r = { (float)(lx + lw - 120), (float)(y - 1), 56.0f, 16.0f };
-    Rectangle sav_r = { (float)(lx + lw - 60),  (float)(y - 1), 56.0f, 16.0f };
+    // ── Botones: Importar / Guardar / Preview|Editar ──────────────────────────
+    // Ancho fijo para los tres botones, alineados a la derecha
+    const int  BTN_W = 56, BTN_H = 16;
+    const float btn_y = (float)(y - 1);
 
-    bool imp_hov = CheckCollisionPointRec(mouse, imp_r);
-    bool sav_hov = CheckCollisionPointRec(mouse, sav_r);
+    Rectangle prev_r = { (float)(lx + lw - 184), btn_y, (float)BTN_W, (float)BTN_H };
+    Rectangle imp_r  = { (float)(lx + lw - 124), btn_y, (float)BTN_W, (float)BTN_H };
+    Rectangle sav_r  = { (float)(lx + lw -  64), btn_y, (float)BTN_W, (float)BTN_H };
 
+    bool prev_hov = CheckCollisionPointRec(mouse, prev_r);
+    bool imp_hov  = CheckCollisionPointRec(mouse, imp_r);
+    bool sav_hov  = CheckCollisionPointRec(mouse, sav_r);
+
+    // Botón Preview / Editar (toggle)
+    const char* prev_label = edit.preview_mode ? "Editar" : "Preview";
+    RL prev_col = edit.preview_mode ? RL{50,90,140,255} : RL{28,35,60,255};
+    DrawRectangleRec(prev_r, prev_hov ? RL{70,110,170,255} : prev_col);
+    DrawRectangleLinesEx(prev_r, 1.0f, { 60, 110, 200, 200 });
+    DrawTextF(prev_label, (int)prev_r.x + 8, (int)prev_r.y + 2, 9, WHITE);
+    if (prev_hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        edit.preview_mode = !edit.preview_mode;
+        body_scroll = 0;
+    }
+
+    // Botón Importar
     DrawRectangleRec(imp_r, imp_hov ? RL{50,80,140,255} : RL{28,35,60,255});
-    DrawRectangleLinesEx(imp_r, 1.0f, {60,100,200,200});
+    DrawRectangleLinesEx(imp_r, 1.0f, { 60, 100, 200, 200 });
     DrawTextF("Importar", (int)imp_r.x + 4, (int)imp_r.y + 2, 9, WHITE);
-
-    RL sav_bg = sav_hov          ? RL{60,120,70,255}
-              : edit.body_dirty  ? RL{40,90,50,255}
-                                 : RL{28,35,60,255};
-    DrawRectangleRec(sav_r, sav_bg);
-    DrawRectangleLinesEx(sav_r, 1.0f, {60,140,70,200});
-    DrawTextF("Guardar", (int)sav_r.x + 4, (int)sav_r.y + 2, 9, WHITE);
-
     if (imp_hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
         show_file_manager = !show_file_manager;
 
+    // Botón Guardar
+    RL sav_bg = sav_hov         ? RL{60,120,70,255}
+              : edit.body_dirty ? RL{40,90,50,255}
+                                : RL{28,35,60,255};
+    DrawRectangleRec(sav_r, sav_bg);
+    DrawRectangleLinesEx(sav_r, 1.0f, { 60, 140, 70, 200 });
+    DrawTextF("Guardar", (int)sav_r.x + 4, (int)sav_r.y + 2, 9, WHITE);
     if (sav_hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && on_save)
         on_save(sel, edit, state, show_file_manager);
 
     y += 18;
 
-    // ── Textarea ──────────────────────────────────────────────────────────────
+    // ── Dispatch: modo edición o modo preview ─────────────────────────────────
+    if (edit.preview_mode) {
+        draw_body_preview(sel, edit, state, lx, lw, py, ph, y, mouse, body_scroll);
+        return;
+    }
+
+    // ── Modo edición: textarea original ──────────────────────────────────────
     Rectangle area_r = { (float)lx, (float)y, (float)lw, (float)area_h };
     bool area_hov = CheckCollisionPointRec(mouse, area_r);
 
@@ -183,7 +353,6 @@ void draw_body_section(MathNode* sel, EditState& edit,
         int draw_y   = (int)area_r.y + 4 - (int)body_scroll;
         int n_lines  = 0;
         const char* line_start = edit.body_buf;
-        const char* last_start = edit.body_buf;
 
         for (const char* p = edit.body_buf; ; p++) {
             if (*p == '\n' || *p == '\0') {
@@ -196,7 +365,6 @@ void draw_body_section(MathNode* sel, EditState& edit,
                     strncpy(tmp, line_start, copy); tmp[copy] = '\0';
                     DrawTextF(tmp, lx + 4, draw_y, font, {200,210,220,210});
                 }
-                last_start = p + 1;
                 draw_y += line_h;
                 n_lines++;
                 if (*p == '\0') break;
@@ -291,7 +459,6 @@ void draw_file_manager(MathNode* sel, EditState& edit,
         DrawTextF(tex_files[i].c_str(), fm_x + 10, iy + 5, 10,
             is_cur ? RL{150,200,255,255} : RL{180,185,210,220});
         if (hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            // Cargar archivo seleccionado
             std::string body = editor_io::read_tex(state, tex_files[i]);
             if (body.size() > 8191) body.resize(8191);
             strncpy(edit.body_buf, body.c_str(), 8191);

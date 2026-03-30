@@ -42,10 +42,11 @@ add_executable(Arkhe
     ui/panels/ubicaciones_panel.cpp
 
     # ui/editor
-    ui/editor/edit_state.hpp
+    ui/editor/edit_state.hpp       # header-only, listado por claridad
     ui/editor/editor_io.cpp
     ui/editor/editor_sections.cpp
-    
+    ui/editor/body_parser.cpp      # ← nuevo: parser de segmentos LaTeX
+    ui/editor/equation_cache.cpp   # ← nuevo: caché async de ecuaciones
 
     # ui/widgets
     ui/widgets/panel_widget.cpp
