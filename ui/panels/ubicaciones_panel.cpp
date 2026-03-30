@@ -1,4 +1,5 @@
 #include "ubicaciones_panel.hpp"
+#include "../core/font_manager.hpp"
 #include "../constants.hpp"
 #include "tinyfiledialogs.h"
 #include <cstring>
@@ -68,7 +69,7 @@ void UbicacionesPanel::draw(Vector2 mouse) {
 
     for (auto& row : rows) {
         // Label
-        DrawText(row.label, lx, y + (fh - 11) / 2, 11, { 140, 150, 185, 230 });
+        DrawTextF(row.label, lx, y + (fh - 11) / 2, 11, { 140, 150, 185, 230 });
 
         // Campo de texto editable
         int fx = lx + label_w;
@@ -81,7 +82,7 @@ void UbicacionesPanel::draw(Vector2 mouse) {
         bool bhov = CheckCollisionPointRec(mouse, br);
         DrawRectangleRec(br, bhov ? Color{ 60, 80, 150, 255 } : Color{ 30, 35, 60, 255 });
         DrawRectangleLinesEx(br, 1.0f, bhov ? Color{ 100, 140, 255, 220 } : Color{ 50, 60, 110, 200 });
-        DrawText("...", (int)br.x + 8, (int)br.y + (fh - 10) / 2, 10, { 160, 170, 210, 220 });
+        DrawTextF("...", (int)br.x + 8, (int)br.y + (fh - 10) / 2, 10, { 160, 170, 210, 220 });
 
         if (bhov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             // tinyfd bloquea el hilo, pero raylib sigue bien porque no hay BeginDrawing activo aquí
@@ -101,7 +102,7 @@ void UbicacionesPanel::draw(Vector2 mouse) {
     bool ahov = CheckCollisionPointRec(mouse, apply_r);
     DrawRectangleRec(apply_r, ahov ? Color{ 40, 80, 180, 255 } : Color{ 28, 50, 120, 255 });
     DrawRectangleLinesEx(apply_r, 1.0f, { 70, 130, 255, 220 });
-    DrawText("Aplicar", (int)apply_r.x + 14, (int)apply_r.y + 7, 12, WHITE);
+    DrawTextF("Aplicar", (int)apply_r.x + 14, (int)apply_r.y + 7, 12, WHITE);
 
     if ((ahov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) || any_confirmed) {
         tb.assets_changed = true;
@@ -109,7 +110,7 @@ void UbicacionesPanel::draw(Vector2 mouse) {
         tb.active_field = -1;
     }
 
-    DrawText("Tip: Enter en cualquier campo o click en Aplicar para recargar.",
+    DrawTextF("Tip: Enter en cualquier campo o click en Aplicar para recargar.",
         lx, pos_y + PH - 12, 9, { 70, 80, 130, 180 });
 }
 

@@ -13,7 +13,7 @@ class ConfigPanel : public PanelWidget {
     static constexpr int PH = 280;
 
     // ── Sección Fuente ────────────────────────────────────────────────────────
-    char font_path_buf[512] = "assets/fonts/font.ttf";
+    char font_path_buf[512] = "assets/fonts/main.ttf";
     int  active_field = -1;
     bool slider_dragging = false;   // ← track drag fuera del hit zone
 

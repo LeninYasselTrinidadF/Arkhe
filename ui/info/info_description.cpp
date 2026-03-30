@@ -1,4 +1,5 @@
 #include "info_description.hpp"
+#include "../core/font_manager.hpp"
 #include "../core/theme.hpp"
 #include "../core/skin.hpp"
 #include "../constants.hpp"
@@ -24,13 +25,13 @@ static int wrapped_text(const char* text, int x, int y,
     while (!s.empty()) {
         int chars = 1;
         while (chars < (int)s.size() &&
-               MeasureText(s.substr(0, chars + 1).c_str(), font_size) < max_w)
+               MeasureTextF(s.substr(0, chars + 1).c_str(), font_size) < max_w)
             chars++;
         if (chars < (int)s.size() && s[chars] != ' ') {
             int sp = (int)s.rfind(' ', chars);
             if (sp > 0) chars = sp;
         }
-        DrawText(s.substr(0, chars).c_str(), x, line_y, font_size, color);
+        DrawTextF(s.substr(0, chars).c_str(), x, line_y, font_size, color);
         s = s.substr(chars);
         if (!s.empty() && s[0] == ' ') s = s.substr(1);
         line_y += font_size + 4;
@@ -212,7 +213,7 @@ static int draw_latex_widget(AppState& state, int x, int y,
         int    dots = (int)(t * 2.0) % 4;
         std::string msg = "Compilando LaTeX";
         for (int d = 0; d < dots; d++) msg += '.';
-        DrawText(msg.c_str(), x, y, 12, th.success);
+        DrawTextF(msg.c_str(), x, y, 12, th.success);
         float bw   = 180.0f;
         float fill = (float)(fmod(t * 0.5, 1.0)) * bw;
         DrawRectangle(x, y + 18, (int)bw, 4, th_alpha(th.bg_button));
@@ -220,13 +221,13 @@ static int draw_latex_widget(AppState& state, int x, int y,
         return y + 30;
     }
     if (job.state == LatexRenderState::Failed) {
-        DrawText("Error al compilar LaTeX:", x, y, 11, { 220, 80, 80, 255 });
+        DrawTextF("Error al compilar LaTeX:", x, y, 11, { 220, 80, 80, 255 });
         y += 16;
         y = wrapped_text(
             (job.error_msg.empty() ? "Error desconocido." : job.error_msg).c_str(),
             x, y, max_w, 10, { 180, 80, 80, 220 });
         y += 6;
-        DrawText("Verifica rutas en Ubicaciones > pdflatex / pdftoppm.",
+        DrawTextF("Verifica rutas en Ubicaciones > pdflatex / pdftoppm.",
                  x, y, 10, th_alpha(th.text_dim));
         return y + 16;
     }
@@ -261,7 +262,7 @@ int draw_description_block(AppState& state,
 {
     const Theme& th = g_theme;
 
-    DrawText("DESCRIPCION", x, y, 11, th_alpha(th.text_dim));
+    DrawTextF("DESCRIPCION", x, y, 11, th_alpha(th.text_dim));
     y += 18;
 
     bool has_tex = !cached_display.empty();
@@ -274,10 +275,10 @@ int draw_description_block(AppState& state,
     } else {
         // Chip ".tex"
         {
-            int tw = MeasureText(".tex", 11);
+            int tw = MeasureTextF(".tex", 11);
             DrawRectangle(x, y, tw + 14, 20,
                           { th.success.r, th.success.g, th.success.b, 40 });
-            DrawText(".tex", x + 7, y + 5, 11, th.success);
+            DrawTextF(".tex", x + 7, y + 5, 11, th.success);
         }
 
         // Botón "Render LaTeX"
@@ -289,8 +290,8 @@ int draw_description_block(AppState& state,
             (job.state == LatexRenderState::Ready && job.tex_loaded)
             ? "Re-render LaTeX" : "Render LaTeX";
 
-        int btn_x = x + MeasureText(".tex", 11) + 22;
-        int btn_w = MeasureText(render_label, 10) + 16;
+        int btn_x = x + MeasureTextF(".tex", 11) + 22;
+        int btn_w = MeasureTextF(render_label, 10) + 16;
         Rectangle btn_r = { (float)btn_x, (float)y, (float)btn_w, 20.0f };
         bool btn_hov = CheckCollisionPointRec(mouse, btn_r);
 
@@ -304,7 +305,7 @@ int draw_description_block(AppState& state,
                 DrawRectangleRec(btn_r, bg_btn);
                 DrawRectangleLinesEx(btn_r, 1.0f, th_alpha(th.success));
             }
-            DrawText(render_label, btn_x + 8, y + 5, 10, th.text_primary);
+            DrawTextF(render_label, btn_x + 8, y + 5, 10, th.text_primary);
             if (btn_hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
                 launch_latex_render(state, tex_target, cached_raw);
         }
@@ -319,7 +320,7 @@ int draw_description_block(AppState& state,
             y += 10;
         }
 
-        DrawText("TEXTO FUENTE (.tex):", x, y, 10, th_alpha(th.text_dim));
+        DrawTextF("TEXTO FUENTE (.tex):", x, y, 10, th_alpha(th.text_dim));
         y += 14;
         std::string preview = cached_display;
         if ((int)preview.size() > 600) preview = preview.substr(0, 597) + "...";

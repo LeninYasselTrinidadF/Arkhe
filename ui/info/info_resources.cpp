@@ -1,4 +1,5 @@
 #include "info_resources.hpp"
+#include "../core/font_manager.hpp"
 #include "../core/theme.hpp"
 #include "../core/skin.hpp"
 #include "../constants.hpp"
@@ -48,7 +49,7 @@ int draw_resources_block(AppState& state, MathNode* sel,
                          Vector2 mouse)
 {
     const Theme& th = g_theme;
-    DrawText("RECURSOS", col, y, 11, th_alpha(th.text_dim));
+    DrawTextF("RECURSOS", col, y, 11, th_alpha(th.text_dim));
     y += 18;
 
     const std::vector<Resource>* res = sel ? &sel->resources : nullptr;
@@ -83,15 +84,15 @@ int draw_resources_block(AppState& state, MathNode* sel,
                     1, th_alpha(th.border));
             }
 
-            int tw = MeasureText(ph[i].tag, 9);
+            int tw = MeasureTextF(ph[i].tag, 9);
             DrawRectangle(rx + card_w - tw - 12, ry + 6, tw + 10, 16,
                           { ph[i].kc.r, ph[i].kc.g, ph[i].kc.b, 40 });
-            DrawText(ph[i].tag,
+            DrawTextF(ph[i].tag,
                      rx + card_w - tw - 7, ry + 8,
                      9, ph[i].kc);
-            DrawText(ph[i].title,
+            DrawTextF(ph[i].title,
                      rx + 10, ry + 10, 13, th_alpha(th.text_secondary));
-            DrawText(ph[i].desc,
+            DrawTextF(ph[i].desc,
                      rx + 10, ry + 30, 11, th_alpha(th.text_dim));
         }
         y += 2 * (card_h + 10) + 10;
@@ -123,14 +124,14 @@ int draw_resources_block(AppState& state, MathNode* sel,
                     1, border);
             }
 
-            int tw = MeasureText(style.tag, 9);
+            int tw = MeasureTextF(style.tag, 9);
             DrawRectangle(rx + card_w - tw - 12, ry + 6, tw + 10, 16,
                           { style.kc.r, style.kc.g, style.kc.b, 40 });
-            DrawText(style.tag, rx + card_w - tw - 7, ry + 8,
+            DrawTextF(style.tag, rx + card_w - tw - 7, ry + 8,
                      9, style.kc);
-            DrawText(r.title.c_str(),
+            DrawTextF(r.title.c_str(),
                      rx + 10, ry + 10, 13, th.text_primary);
-            DrawText(r.content.substr(0, 42).c_str(),
+            DrawTextF(r.content.substr(0, 42).c_str(),
                      rx + 10, ry + 30, 11, th_alpha(th.text_secondary));
 
             if (r.kind == "link" && hov &&

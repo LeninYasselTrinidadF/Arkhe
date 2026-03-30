@@ -1,6 +1,7 @@
 #pragma once
 #include "data/math_node.hpp"
 #include "data/crossref_loader.hpp"
+#include "data/dep_graph.hpp"
 #include "ui/core/texture_cache.hpp"
 #include <string>
 #include <vector>
@@ -27,10 +28,10 @@ struct ToolbarState {
     ToolbarTab active_tab = ToolbarTab::None;
 
     // Rutas independientes
-    char assets_path[512] = "assets/";
-    char entries_path[512] = "assets/entries/";
+    char assets_path[512]   = "assets/";
+    char entries_path[512]  = "assets/entries/";
     char graphics_path[512] = "assets/graphics/";
-    char latex_path[512] = "C:/texlive/2025/bin/windows/pdflatex.exe";
+    char latex_path[512]    = "C:/texlive/2025/bin/windows/pdflatex.exe";
     char pdftoppm_path[512] = "C:/texlive/2025/bin/windows/pdftoppm.exe";
 
     // Flags de activacion
@@ -40,10 +41,10 @@ struct ToolbarState {
     int  active_field = -1;
 
     // Paneles flotantes
-    bool docs_open = false;
-    bool editor_open = false;
+    bool docs_open       = false;
+    bool editor_open     = false;
     bool ubicaciones_open = false;
-    bool config_open = false;
+    bool config_open     = false;
 
     // ── Tema visual ───────────────────────────────────────────────────────────
     // 0=Dark  1=Light  2=Bocchi  3=ChainsawMan  4=Generic
@@ -91,6 +92,20 @@ struct AppState {
     ToolbarState toolbar;
     LatexRenderJob latex_render;
 
+    // ── Vista de dependencias ─────────────────────────────────────────────────
+    bool        dep_view_active = false;   // true → draw_dep_view en lugar de draw_bubble_view
+    std::string dep_focus_id;              // nodo central de la vista DAG
+    // Grafo de dependencias por modo (MSC2020, Mathlib, Standard).
+    DepGraph    dep_graph_msc;
+    DepGraph    dep_graph_mathlib;
+    DepGraph    dep_graph_standard;
+    // Compat: grafo activo (legacy name used across code)
+    DepGraph    dep_graph;
+
+    // Posición/ajustes temporales de layout: key = "MSC:ID" | "ML:ID" | "STD:ID"
+    bool position_mode_active = false; // cuando true, clicks en nodos no navegan y se pueden mover
+    std::unordered_map<std::string, Vector2> temp_positions;
+
     struct PendingNav {
         bool        active = false;
         ViewMode    mode = ViewMode::MSC2020;
@@ -99,6 +114,24 @@ struct AppState {
         std::shared_ptr<MathNode> root;
         std::shared_ptr<MathNode> node;
     };
+// Helper: obtener grafo de dependencias correspondiente al modo actual
+inline DepGraph& get_dep_graph_for(AppState& s) {
+    switch (s.mode) {
+    case ViewMode::MSC2020:  return s.dep_graph_msc;
+    case ViewMode::Mathlib:  return s.dep_graph_mathlib;
+    case ViewMode::Standard: return s.dep_graph_standard;
+    }
+    return s.dep_graph_msc;
+}
+
+inline const DepGraph& get_dep_graph_for_const(const AppState& s) {
+    switch (s.mode) {
+    case ViewMode::MSC2020:  return s.dep_graph_msc;
+    case ViewMode::Mathlib:  return s.dep_graph_mathlib;
+    case ViewMode::Standard: return s.dep_graph_standard;
+    }
+    return s.dep_graph_msc;
+}
     PendingNav pending_nav;
 
     MathNode* current() const {
@@ -160,6 +193,24 @@ struct AppState {
     void restore_cam(Camera2D& cam) const {
         auto cs = load_cam();
         cam.target = cs.target;
-        cam.zoom = cs.zoom > 0.f ? cs.zoom : 1.f;
+        cam.zoom   = cs.zoom > 0.f ? cs.zoom : 1.f;
     }
 };
+// Helper: obtener grafo de dependencias correspondiente al modo actual
+inline DepGraph& get_dep_graph_for(AppState& s) {
+    switch (s.mode) {
+    case ViewMode::MSC2020:  return s.dep_graph_msc;
+    case ViewMode::Mathlib:  return s.dep_graph_mathlib;
+    case ViewMode::Standard: return s.dep_graph_standard;
+    }
+    return s.dep_graph_msc;
+}
+
+inline const DepGraph& get_dep_graph_for_const(const AppState& s) {
+    switch (s.mode) {
+    case ViewMode::MSC2020:  return s.dep_graph_msc;
+    case ViewMode::Mathlib:  return s.dep_graph_mathlib;
+    case ViewMode::Standard: return s.dep_graph_standard;
+    }
+    return s.dep_graph_msc;
+}

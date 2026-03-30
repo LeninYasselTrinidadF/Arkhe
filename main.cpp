@@ -2,6 +2,8 @@
 #include "data/msc_loader.hpp"
 #include "data/mathlib_loader.hpp"
 #include "data/crossref_loader.hpp"
+#include "data/nav_state.hpp"
+#include "data/position_state.hpp"
 
 // UI Core
 #include "ui/core/font_manager.hpp"
@@ -17,13 +19,15 @@
 #include "ui/panels/toolbar.hpp"
 
 // UI Raíz / Otros
-#include "ui/bubble_stats.hpp"
+#include "ui/bubble/bubble_stats.hpp"
 #include "ui/bubble_view.hpp"
+#include "ui/dep_view.hpp"
 #include "ui/constants.hpp" // Asumiendo que está en core
 #include "ui/core/overlay.hpp"   // Asumiendo que está en core
 
 #include "raylib.h"
 #include "raymath.h"
+#include <fstream>  // <--- Esta es la pieza que falta
 #include <cstring>
 
 int g_split_y = TOOLBAR_H + 640;
@@ -56,6 +60,16 @@ static void reload_all_assets(AppState& state,
     bubble_stats_clear();
     state.nav_stack.clear(); state.cam_memory.clear();
     if (root_msc) state.push(root_msc);
+    // Recargar grafo de dependencias por modo (si existen archivos específicos, se usan)
+    state.dep_graph_msc.load(asset_path(state, "deps.json"));
+    state.dep_graph_mathlib.load(asset_path(state, "deps_mathlib.json"));
+    state.dep_graph_standard.load(asset_path(state, "deps_standard.json"));
+
+    // Cargar posiciones temporales guardadas
+    position_state_load(state);
+    // Actualizar alias compat
+    state.dep_graph = get_dep_graph_for(state);
+    state.dep_view_active = false;
 }
 
 int main() {
@@ -66,10 +80,11 @@ int main() {
     g_circle_mask.load();
 
     // Fuente custom — fallback silencioso si no existe el .ttf
-    g_fonts.load("assets/fonts/font.ttf");
+    g_fonts.load("assets/fonts/main.ttf");
     g_fonts.base_size = 14.0f;
 
     Camera2D cam={}; cam.zoom=1.0f;
+    Camera2D dep_cam={}; dep_cam.zoom=1.0f;
     AppState state;
     strncpy(state.toolbar.entries_path,  "assets/entries/",  511);
     strncpy(state.toolbar.graphics_path, "assets/graphics/", 511);
@@ -85,6 +100,15 @@ int main() {
     state.textures.preload_all();
     g_skin.load(ensure_slash(state.toolbar.graphics_path), state.textures);
     if (root_msc) state.push(root_msc);
+    // Cargar grafo de dependencias por modo
+    state.dep_graph_msc.load(asset_path(state, "deps.json"));
+    state.dep_graph_mathlib.load(asset_path(state, "deps_mathlib.json"));
+    state.dep_graph_standard.load(asset_path(state, "deps_standard.json"));
+
+    // Cargar posiciones temporales guardadas
+    position_state_load(state);
+    // Compat: mantener el grafo "legacy" apuntando al actual
+    state.dep_graph = get_dep_graph_for(state);
 
     auto current_root=[&]()->std::shared_ptr<MathNode>{
         switch(state.mode){
@@ -110,6 +134,9 @@ int main() {
         if (state.toolbar.assets_changed) {
             state.toolbar.assets_changed=false;
             reload_all_assets(state,root_msc,root_mathlib,root_std);
+            // Al recargar assets el árbol cambia → borrar estado guardado
+            // para no intentar restaurar nodos que ya no existen
+            { std::ofstream f(NAV_STATE_FILE); if(f.is_open()) f << "{}"; }
             prev_mode=state.mode; prev_depth=(int)state.nav_stack.size();
         }
         if (state.pending_nav.active) {
@@ -138,21 +165,41 @@ int main() {
         }
 
         if(state.mode!=prev_mode){
+            // Guardar posición del modo que se abandona
+            nav_state_save(state, prev_mode);
             MathNode* old=state.current();
             state.save_cam(cam,state.cam_key_for(prev_mode,old?old->code:"ROOT"));
+            // Preparar el nuevo modo
             state.nav_stack.clear();
             auto root=current_root(); if(root)state.push(root);
+            // Restaurar posición guardada del nuevo modo (si existe)
+            nav_state_load(state, state.mode, current_root());
             state.restore_cam(cam); prev_mode=state.mode;
+            // actualizar alias compat al cambiar modo
+            state.dep_graph = get_dep_graph_for(state);
         }
         int cur_depth=(int)state.nav_stack.size();
         if(cur_depth!=prev_depth){state.restore_cam(cam);prev_depth=cur_depth;}
-        if(IsKeyPressed(KEY_ESCAPE)){state.save_cam(cam);state.pop();}
+        if (IsKeyPressed(KEY_ESCAPE)) {
+            if (state.dep_view_active) {
+                // ESC en vista de dependencias → volver al modo burbuja anterior
+                state.dep_view_active = false;
+            }
+            else {
+                state.save_cam(cam);
+                state.pop();
+            }
+        }
 
         const Theme& th=g_theme;
         BeginDrawing();
         ClearBackground(th.bg_app);
 
-        draw_bubble_view(state,cam,mouse);
+        if (state.dep_view_active) {
+            draw_dep_view(state, dep_cam, mouse);
+        } else {
+            draw_bubble_view(state, cam, mouse);
+        }
         draw_mode_switcher(state,mouse);
         DrawLineEx({(float)CANVAS_W(),(float)UI_TOP()},{(float)CANVAS_W(),(float)g_split_y},1.f,th.split_vline);
         draw_search_panel(state,current_root().get(),mouse);

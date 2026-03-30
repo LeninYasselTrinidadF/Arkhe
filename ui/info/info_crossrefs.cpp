@@ -1,4 +1,5 @@
 #include "info_crossrefs.hpp"
+#include "../core/font_manager.hpp"
 #include "../core/theme.hpp"
 #include "../core/skin.hpp"
 #include "../constants.hpp"
@@ -111,13 +112,13 @@ std::string get_context_code(AppState& state, MathNode* sel) {
 // ── Chip helper local ─────────────────────────────────────────────────────────
 
 static void xref_chip(const char* text, int x, int y, Color bg, Color fg) {
-    int tw = MeasureText(text, 11);
+    int tw = MeasureTextF(text, 11);
     int cw = tw + 14, ch = 20;
     if (g_skin.card.valid())
         g_skin.card.draw((float)x, (float)y, (float)cw, (float)ch, bg);
     else
         DrawRectangle(x, y, cw, ch, th_alpha(bg));
-    DrawText(text, x + 7, y + 5, 11, fg);
+    DrawTextF(text, x + 7, y + 5, 11, fg);
 }
 
 // ── draw_mathlib_hit_card (privado) ───────────────────────────────────────────
@@ -153,16 +154,16 @@ static void draw_mathlib_hit_card(AppState& state,
     auto dot = ms.rfind('.');
     if (dot != std::string::npos) ms = ms.substr(dot + 1);
     if ((int)ms.size() > 22) ms = ms.substr(0, 21) + ".";
-    DrawText(ms.c_str(), rx + 8, ry + 7, 12, th.success);
+    DrawTextF(ms.c_str(), rx + 8, ry + 7, 12, th.success);
 
     std::string mf = hit.module;
     if ((int)mf.size() > 36) mf = ".." + mf.substr(mf.size() - 34);
-    DrawText(mf.c_str(), rx + 8, ry + 24, 9, th_alpha(th.success_dim));
+    DrawTextF(mf.c_str(), rx + 8, ry + 24, 9, th_alpha(th.success_dim));
 
-    DrawText(("via " + hit.matched_code).c_str(),
+    DrawTextF(("via " + hit.matched_code).c_str(),
              rx + 8, ry + 37, 9, th_alpha(th.text_dim));
     if (ch > 52)
-        DrawText("[ click para navegar ]", rx + 8, ry + 50, 8,
+        DrawTextF("[ click para navegar ]", rx + 8, ry + 50, 8,
                  th_alpha(th.text_dim));
 
     if (hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
@@ -187,13 +188,13 @@ int draw_inverse_block(AppState& state,
     const char* lbl = (state.mode == ViewMode::MSC2020)
         ? "MODULOS MATHLIB RELACIONADOS (via MSC)"
         : "MODULOS MATHLIB RELACIONADOS (via Estandar)";
-    DrawText(lbl, col, y, 11, hdr_col);
+    DrawTextF(lbl, col, y, 11, hdr_col);
     y += 18;
 
     if (hits.empty()) {
-        DrawText("No hay referencias cruzadas para esta area.",
+        DrawTextF("No hay referencias cruzadas para esta area.",
                  col, y, 11, th_alpha(th.text_dim));
-        DrawText("Agrega entradas en crossref.json con los codigos de este nodo.",
+        DrawTextF("Agrega entradas en crossref.json con los codigos de este nodo.",
                  col, y + 16, 10, th_alpha(th.text_dim));
         y += 42;
     } else {
@@ -210,7 +211,7 @@ int draw_inverse_block(AppState& state,
             char more[64];
             snprintf(more, sizeof(more), "... y %d modulos mas",
                      (int)hits.size() - shown);
-            DrawText(more, col, y, 10, th_alpha(th.text_dim));
+            DrawTextF(more, col, y, 10, th_alpha(th.text_dim));
             y += 18;
         }
     }
@@ -230,7 +231,7 @@ int draw_crossrefs_block(AppState& state,
                          Vector2 mouse)
 {
     const Theme& th = g_theme;
-    DrawText("REFERENCIAS CRUZADAS", col, y, 11, th_alpha(th.text_dim));
+    DrawTextF("REFERENCIAS CRUZADAS", col, y, 11, th_alpha(th.text_dim));
     y += 18;
     int ci = 0;
 
@@ -258,9 +259,9 @@ int draw_crossrefs_block(AppState& state,
         xref_chip("MSC", rx + card_w - 44, ry + 6,
                    { th.accent.r, th.accent.g, th.accent.b, 40 },
                    th.accent_hover);
-        DrawText(code.c_str(),     rx + 10, ry + 10, 14, th.accent_hover);
-        DrawText("Ver en MSC2020", rx + 10, ry + 32, 10, th_alpha(th.text_secondary));
-        DrawText("[ click ]",      rx + 10, ry + 48,  9, th_alpha(th.text_dim));
+        DrawTextF(code.c_str(),     rx + 10, ry + 10, 14, th.accent_hover);
+        DrawTextF("Ver en MSC2020", rx + 10, ry + 32, 10, th_alpha(th.text_secondary));
+        DrawTextF("[ click ]",      rx + 10, ry + 48,  9, th_alpha(th.text_dim));
 
         if (hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             auto f = find_node_by_code_local(state.msc_root, code);
@@ -300,10 +301,10 @@ int draw_crossrefs_block(AppState& state,
         auto dot = code.rfind('.');
         std::string label = (dot != std::string::npos)
                           ? code.substr(dot + 1) : code;
-        DrawText(label.c_str(),     rx + 10, ry + 10, 13, th.success);
-        DrawText(code.c_str(),      rx + 10, ry + 28,  9, th_alpha(th.success_dim));
-        DrawText("Ver en Estandar", rx + 10, ry + 42, 10, th_alpha(th.text_secondary));
-        DrawText("[ click ]",       rx + 10, ry + 54,  9, th_alpha(th.text_dim));
+        DrawTextF(label.c_str(),     rx + 10, ry + 10, 13, th.success);
+        DrawTextF(code.c_str(),      rx + 10, ry + 28,  9, th_alpha(th.success_dim));
+        DrawTextF("Ver en Estandar", rx + 10, ry + 42, 10, th_alpha(th.text_secondary));
+        DrawTextF("[ click ]",       rx + 10, ry + 54,  9, th_alpha(th.text_dim));
 
         if (hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
             state.standard_root)

@@ -1,4 +1,5 @@
 #include "info_header.hpp"
+#include "../core/font_manager.hpp"
 #include "../core/theme.hpp"
 #include "../core/skin.hpp"
 #include "../constants.hpp"
@@ -8,13 +9,13 @@
 // Mismo comportamiento que draw_chip en panel_widget, pero accesible aquí
 // sin tener un PanelWidget instanciado.
 static void header_chip(const char* text, int x, int y, Color bg, Color fg) {
-    int tw = MeasureText(text, 11);
+    int tw = MeasureTextF(text, 11);
     int cw = tw + 14, ch = 20;
     if (g_skin.card.valid())
         g_skin.card.draw((float)x, (float)y, (float)cw, (float)ch, bg);
     else
         DrawRectangle(x, y, cw, ch, th_alpha(bg));
-    DrawText(text, x + 7, y + 5, 11, fg);
+    DrawTextF(text, x + 7, y + 5, 11, fg);
 }
 
 // ── draw_info_header ──────────────────────────────────────────────────────────
@@ -33,23 +34,23 @@ void draw_info_header(AppState& state, int top, int w) {
                  ? th.accent_hover
                  : th_alpha(th.text_dim);
 
-        DrawText(crumb.c_str(), tx, top + 8, 11, cc);
-        tx += MeasureText(crumb.c_str(), 11);
+        DrawTextF(crumb.c_str(), tx, top + 8, 11, cc);
+        tx += MeasureTextF(crumb.c_str(), 11);
 
         if (i < (int)state.nav_stack.size() - 1) {
-            DrawText("  >  ", tx, top + 8, 11, th_alpha(th.text_dim));
-            tx += MeasureText("  >  ", 11);
+            DrawTextF("  >  ", tx, top + 8, 11, th_alpha(th.text_dim));
+            tx += MeasureTextF("  >  ", 11);
         }
         if (tx > w - 200) {
-            DrawText("...", tx, top + 8, 11, th_alpha(th.text_dim));
+            DrawTextF("...", tx, top + 8, 11, th_alpha(th.text_dim));
             break;
         }
     }
 
     // ── Sin selección ─────────────────────────────────────────────────────────
     if (state.selected_code.empty()) {
-        DrawText("Selecciona una burbuja", px, top + 28, 18, th_alpha(th.text_dim));
-        DrawText("para ver su informacion detallada.", px, top + 52, 12,
+        DrawTextF("Selecciona una burbuja", px, top + 28, 18, th_alpha(th.text_dim));
+        DrawTextF("para ver su informacion detallada.", px, top + 52, 12,
                  th_alpha(th.text_dim));
         return;
     }
@@ -57,7 +58,7 @@ void draw_info_header(AppState& state, int top, int w) {
     // ── Título ────────────────────────────────────────────────────────────────
     std::string title = state.selected_label;
     if ((int)title.size() > 55) title = title.substr(0, 54) + "...";
-    DrawText(title.c_str(), px, top + 24, 20, th.text_primary);
+    DrawTextF(title.c_str(), px, top + 24, 20, th.text_primary);
 
     // ── Chips: código / nivel / modo ──────────────────────────────────────────
     // Chip de código
@@ -82,7 +83,7 @@ void draw_info_header(AppState& state, int top, int w) {
             }
         }
     }
-    int chip_w = MeasureText(state.selected_code.c_str(), 11) + 14 + 14;
+    int chip_w = MeasureTextF(state.selected_code.c_str(), 11) + 14 + 14;
     header_chip(level_str, px + chip_w, top + 52,
                 th_alpha(th.bg_button),
                 th_alpha(th.ctrl_text_dim));
@@ -96,7 +97,7 @@ void draw_info_header(AppState& state, int top, int w) {
         state.mode == ViewMode::Mathlib  ? th.success  :
         state.mode == ViewMode::Standard ? th.warning   : th.accent;
 
-    int chip2_w = MeasureText(level_str, 11) + 14 + 14;
+    int chip2_w = MeasureTextF(level_str, 11) + 14 + 14;
     header_chip(mode_badge,
                 px + chip_w + chip2_w, top + 52,
                 { mode_col.r, mode_col.g, mode_col.b, 40 },

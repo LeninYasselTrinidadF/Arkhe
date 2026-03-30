@@ -1,4 +1,5 @@
 #include "panel_widget.hpp"
+#include "../core/font_manager.hpp"
 #include "../core/overlay.hpp"
 #include "../core/theme.hpp"
 #include "../constants.hpp"
@@ -47,12 +48,12 @@ bool PanelWidget::draw_text_field(char* buf, int buf_len,
     DrawRectangleLinesEx(r, 1.0f, border);
 
     std::string shown = buf;
-    while (MeasureText(shown.c_str(), font) > w - 10 && shown.size() > 3)
+    while (MeasureTextF(shown.c_str(), font) > w - 10 && shown.size() > 3)
         shown = ".." + shown.substr(shown.size() - shown.size() / 2);
-    DrawText(shown.c_str(), x + 5, y + (h - font) / 2, font, th.text_primary);
+    DrawTextF(shown.c_str(), x + 5, y + (h - font) / 2, font, th.text_primary);
 
     if (is_active && (int)(GetTime() * 2) % 2 == 0) {
-        int cw = MeasureText(buf, font);
+        int cw = MeasureTextF(buf, font);
         int cx = x + 5 + cw;
         if (cx < x + w - 4) DrawLine(cx, y + 3, cx, y + h - 3, th.text_primary);
     }
@@ -74,16 +75,16 @@ void PanelWidget::draw_labeled_field(const char* label, char* buf, int buf_len,
     int x, int y, int w, int font,
     int& active_id, int my_id, Vector2 mouse)
 {
-    DrawText(label, x, y, 10, th_alpha(g_theme.text_dim));
+    DrawTextF(label, x, y, 10, th_alpha(g_theme.text_dim));
     draw_text_field(buf, buf_len, x, y + 14, w, font + 4, font, active_id, my_id, mouse);
 }
 
 // ── draw_chip ─────────────────────────────────────────────────────────────────
 
 void PanelWidget::draw_chip(const char* text, int x, int y, Color bg, Color fg) {
-    int tw = MeasureText(text, 11);
+    int tw = MeasureTextF(text, 11);
     DrawRectangle(x, y, tw + 14, 20, th_alpha(bg));
-    DrawText(text, x + 7, y + 5, 11, fg);
+    DrawTextF(text, x + 7, y + 5, 11, fg);
 }
 
 // ── draw_wrapped_text ─────────────────────────────────────────────────────────
@@ -96,13 +97,13 @@ int PanelWidget::draw_wrapped_text(const char* text, int x, int y,
     while (!s.empty()) {
         int chars = 1;
         while (chars < (int)s.size() &&
-            MeasureText(s.substr(0, chars + 1).c_str(), font_size) < max_w)
+            MeasureTextF(s.substr(0, chars + 1).c_str(), font_size) < max_w)
             chars++;
         if (chars < (int)s.size() && s[chars] != ' ') {
             int sp = (int)s.rfind(' ', chars);
             if (sp > 0) chars = sp;
         }
-        DrawText(s.substr(0, chars).c_str(), x, line_y, font_size, color);
+        DrawTextF(s.substr(0, chars).c_str(), x, line_y, font_size, color);
         s = s.substr(chars);
         if (!s.empty() && s[0] == ' ') s = s.substr(1);
         line_y += font_size + 4;
@@ -233,7 +234,7 @@ bool PanelWidget::draw_window_frame(int min_pw, int min_ph,
 
     // Cabecera
     DrawRectangle(px, py, pw, HEADER_H, th.bg_panel_header);
-    DrawText(title, px + 12, py + 9, 12, title_col);
+    DrawTextF(title, px + 12, py + 9, 12, title_col);
 
     // Indicador arrastrable (seis puntitos en el centro de la cabecera)
     for (int row = 0; row < 3; row++)
@@ -272,7 +273,7 @@ bool PanelWidget::draw_window_frame(int min_pw, int min_ph,
     Rectangle cr = { (float)(px + pw - 28), (float)(py + 5), 22.0f, 22.0f };
     bool chov = CheckCollisionPointRec(mouse, cr);
     DrawRectangleRec(cr, chov ? th.close_bg_hover : th.close_bg);
-    DrawText("x", (int)cr.x + 7, (int)cr.y + 4, 13, th.text_primary);
+    DrawTextF("x", (int)cr.x + 7, (int)cr.y + 4, 13, th.text_primary);
 
     return chov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
 }

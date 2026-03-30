@@ -54,11 +54,11 @@ void ConfigPanel::draw_font_section(int lx, int fw, int& y, Vector2 mouse) {
 
     // ── Cabecera de sección ───────────────────────────────────────────────────
     DrawRectangle(lx - 4, y - 2, fw + 8, 18, th_alpha(th.bg_button));
-    DrawText("FUENTE", lx, y + 2, 10, th_alpha(th.accent));
+    DrawTextF("FUENTE", lx, y + 2, 10, th_alpha(th.accent));
     y += 22;
 
     // ── Ruta .ttf ─────────────────────────────────────────────────────────────
-    DrawText("Archivo .ttf", lx, y, 10, th_alpha(th.text_dim));
+    DrawTextF("Archivo .ttf", lx, y, 10, th_alpha(th.text_dim));
     y += 13;
     draw_text_field(font_path_buf, 512,
         lx, y, fw - 78, 22, 11,
@@ -69,7 +69,7 @@ void ConfigPanel::draw_font_section(int lx, int fw, int& y, Vector2 mouse) {
     DrawRectangleRec(load_r, load_hov
         ? Color{ 80,50,180,255 } : Color{ 50,30,120,255 });
     DrawRectangleLinesEx(load_r, 1.0f, { 120, 80, 255, 200 });
-    DrawText("Cargar", (int)load_r.x + 11, (int)load_r.y + 6, 10, WHITE);
+    DrawTextF("Cargar", (int)load_r.x + 11, (int)load_r.y + 6, 10, WHITE);
     if (load_hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         g_fonts.unload();
         g_fonts.load(font_path_buf);
@@ -78,7 +78,7 @@ void ConfigPanel::draw_font_section(int lx, int fw, int& y, Vector2 mouse) {
     y += 28;
 
     // ── Slider tamaño base ────────────────────────────────────────────────────
-    DrawText("Tamaño base", lx, y, 10, th_alpha(th.text_dim));
+    DrawTextF("Tamaño base", lx, y, 10, th_alpha(th.text_dim));
     y += 13;
 
     constexpr float F_MIN = 8.0f, F_MAX = 28.0f;
@@ -116,7 +116,7 @@ void ConfigPanel::draw_font_section(int lx, int fw, int& y, Vector2 mouse) {
 
     char sz_str[16];
     snprintf(sz_str, sizeof(sz_str), "%.0fpx", sz);
-    DrawText(sz_str, lx + track_w + 8, y + 3, 12, th.text_primary);
+    DrawTextF(sz_str, lx + track_w + 8, y + 3, 12, th.text_primary);
     y += 26;
 
     // ── Preview ───────────────────────────────────────────────────────────────

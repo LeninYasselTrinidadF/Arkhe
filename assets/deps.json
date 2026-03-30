@@ -1,0 +1,31 @@
+{
+  "_comment": "Grafo de dependencias entre nodos MSC2020. Cada clave es un code del árbol.",
+  "_format": "{ 'CODE': { 'label': '...', 'depends_on': ['CODE1', 'CODE2'] } }",
+
+  "00A05": { "label": "Mathematics in general",           "depends_on": [] },
+
+  "26A03": { "label": "Foundations; limits",              "depends_on": ["00A05"] },
+  "26A06": { "label": "One-variable calculus",            "depends_on": ["26A03"] },
+  "26A15": { "label": "Continuity and related questions", "depends_on": ["26A03"] },
+  "26A24": { "label": "Differentiation",                  "depends_on": ["26A15"] },
+  "26A42": { "label": "Riemann integral",                 "depends_on": ["26A24"] },
+
+  "54A05": { "label": "Topological spaces, axioms",       "depends_on": ["00A05"] },
+  "54A10": { "label": "Several topologies on one set",    "depends_on": ["54A05"] },
+  "54E35": { "label": "Metric spaces, metrizability",     "depends_on": ["54A05", "26A03"] },
+
+  "20A05": { "label": "Axiomatics and elementary theory (groups)", "depends_on": ["00A05"] },
+  "20M30": { "label": "Representation of semigroups",    "depends_on": ["20A05"] },
+
+  "15A03": { "label": "Vector spaces, linear dependence", "depends_on": ["20A05"] },
+  "15A04": { "label": "Linear maps, matrices",            "depends_on": ["15A03"] },
+
+  "22A05": { "label": "Structure of general topological groups", "depends_on": ["54A05", "20A05"] },
+  "54H10": { "label": "Topological representations of algebraic systems", "depends_on": ["54A05", "20A05"] },
+
+  "34A12": { "label": "Initial value problems, ODE",      "depends_on": ["26A15", "26A24"] },
+  "34A34": { "label": "Nonlinear ODE",                    "depends_on": ["34A12"] },
+
+  "37B05": { "label": "Dynamical systems, general",       "depends_on": ["54A05", "26A15"] },
+  "37C10": { "label": "Flows, actions of R",              "depends_on": ["37B05", "34A12"] }
+}

@@ -1,4 +1,5 @@
 #include "search_panel.hpp"
+#include "../core/font_manager.hpp"
 #include "../core/overlay.hpp"   // ← guarda de clicks
 #include "../search/loogle.hpp"
 #include "../core/nine_patch.hpp"
@@ -33,7 +34,7 @@ static void draw_search_field(int px, int y, int pw, int h, const char* buf) {
     const Theme& th = g_theme;
     if (g_skin.field.valid()) g_skin.field.draw((float)px, (float)y, (float)pw, (float)h, th.bg_field);
     else { DrawRectangle(px, y, pw, h, th.bg_field); DrawRectangleLines(px, y, pw, h, th.border); }
-    DrawText(buf, px + 6, y + (h - 13) / 2, 13, th.text_primary);
+    DrawTextF(buf, px + 6, y + (h - 13) / 2, 13, th.text_primary);
 }
 
 static bool draw_search_button(const char* label, int x, int y, int w, int h, bool hov) {
@@ -41,7 +42,7 @@ static bool draw_search_button(const char* label, int x, int y, int w, int h, bo
     Color bg = hov ? th.accent : th_alpha(th.accent_dim);
     if (g_skin.button.valid()) g_skin.button.draw((float)x, (float)y, (float)w, (float)h, bg);
     else DrawRectangleRec({ (float)x,(float)y,(float)w,(float)h }, bg);
-    DrawText(label, x + (w - MeasureText(label, 12)) / 2, y + (h - 12) / 2, 12, th.text_primary);
+    DrawTextF(label, x + (w - MeasureTextF(label, 12)) / 2, y + (h - 12) / 2, 12, th.text_primary);
     return hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
 }
 
@@ -62,11 +63,11 @@ void draw_search_panel(AppState& state, const MathNode* search_root, Vector2 mou
     else DrawRectangle(CANVAS_W(), panel_top, PANEL_W(), TOP_H(), th.bg_panel);
 
     int y = panel_top;
-    DrawText("BUSQUEDA", px, y + 10, 13, th_alpha(th.text_dim));
+    DrawTextF("BUSQUEDA", px, y + 10, 13, th_alpha(th.text_dim));
     draw_divider_h(y + 28); y += 34;
 
     // ── Búsqueda local ────────────────────────────────────────────────────────
-    DrawText("Local (fuzzy)", px, y, 11, th_alpha(th.text_dim)); y += 14;
+    DrawTextF("Local (fuzzy)", px, y, 11, th_alpha(th.text_dim)); y += 14;
     draw_search_field(px, y, pw, 28, state.search_buf); y += 34;
 
     // Input del panel solo si el mouse está en la zona del panel Y no hay overlay
@@ -90,9 +91,9 @@ void draw_search_panel(AppState& state, const MathNode* search_root, Vector2 mou
             bool sel = (hit.node->code == state.selected_code);
             bool hov = panel_active && mouse.x > px && mouse.x<px + pw && mouse.y>y && mouse.y < y + 32;
             draw_result_card(px, y, pw, 32, hov, sel);
-            DrawText(hit.node->code.c_str(), px + 6, y + 4, 11, th.text_code);
+            DrawTextF(hit.node->code.c_str(), px + 6, y + 4, 11, th.text_code);
             std::string sl = hit.node->label.substr(0, 36);
-            DrawText(sl.c_str(), px + 6, y + 18, 10, th_alpha(th.text_secondary));
+            DrawTextF(sl.c_str(), px + 6, y + 18, 10, th_alpha(th.text_secondary));
             if (hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                 state.selected_code = hit.node->code; state.selected_label = hit.node->label;
                 if (!hit.node->children.empty())state.push(hit.node);
@@ -105,7 +106,7 @@ void draw_search_panel(AppState& state, const MathNode* search_root, Vector2 mou
     int loogle_half = panel_top + TOP_H() / 2;
     draw_divider_h(loogle_half);
     int ly = loogle_half + 6;
-    DrawText("Loogle (Mathlib)", px, ly, 11, th_alpha(th.text_dim)); ly += 14;
+    DrawTextF("Loogle (Mathlib)", px, ly, 11, th_alpha(th.text_dim)); ly += 14;
 
     draw_search_field(px, ly, pw - 60, 28, state.loogle_buf);
 
@@ -127,8 +128,8 @@ void draw_search_panel(AppState& state, const MathNode* search_root, Vector2 mou
     }
     ly += 34;
 
-    if (state.loogle_loading.load()) { DrawText("Buscando...", px, ly, 12, th.success); ly += 18; }
-    else if (!state.loogle_error.empty()) { DrawText(state.loogle_error.c_str(), px, ly, 11, { 200,100,100,255 }); ly += 16; }
+    if (state.loogle_loading.load()) { DrawTextF("Buscando...", px, ly, 12, th.success); ly += 18; }
+    else if (!state.loogle_error.empty()) { DrawTextF(state.loogle_error.c_str(), px, ly, 11, { 200,100,100,255 }); ly += 16; }
 
     // Resultados Loogle
     for (auto& r : state.loogle_results) {
@@ -136,11 +137,11 @@ void draw_search_panel(AppState& state, const MathNode* search_root, Vector2 mou
         bool hov = panel_active && mouse.x > px && mouse.x<px + pw && mouse.y>ly && mouse.y < ly + 48;
         draw_result_card(px, ly, pw, 48, hov, false);
         std::string name = r.name.size() > 38 ? r.name.substr(0, 37) + "." : r.name;
-        DrawText(name.c_str(), px + 8, ly + 5, 12, th.text_code);
+        DrawTextF(name.c_str(), px + 8, ly + 5, 12, th.text_code);
         std::string mod = r.module.size() > 44 ? r.module.substr(0, 43) + "." : r.module;
-        DrawText(mod.c_str(), px + 8, ly + 22, 10, th_alpha(th.text_secondary));
+        DrawTextF(mod.c_str(), px + 8, ly + 22, 10, th_alpha(th.text_secondary));
         std::string sig = r.type_sig.size() > 48 ? r.type_sig.substr(0, 47) + "." : r.type_sig;
-        DrawText(sig.c_str(), px + 8, ly + 35, 10, th_alpha(th.text_dim));
+        DrawTextF(sig.c_str(), px + 8, ly + 35, 10, th_alpha(th.text_dim));
 
         if (hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             auto found = find_node_by_module(state.mathlib_root, r.module);

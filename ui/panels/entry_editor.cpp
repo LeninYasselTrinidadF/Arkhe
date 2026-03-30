@@ -1,4 +1,5 @@
 #include "entry_editor.hpp"
+#include "../core/font_manager.hpp"
 #include "constants.hpp"
 #include <nlohmann/json.hpp>
 #include <fstream>
@@ -145,10 +146,10 @@ void EntryEditor::draw_body_section(MathNode* sel, int lx, int lw,
     const int area_h = 130;
 
     // ── Label + filename + dirty ─────────────────────────────────────────────
-    DrawText("Cuerpo LaTeX:", lx, y, 10, { 100, 110, 150, 220 });
+    DrawTextF("Cuerpo LaTeX:", lx, y, 10, { 100, 110, 150, 220 });
     if (!edit.tex_file.empty()) {
         std::string lbl = "  " + edit.tex_file + (edit.body_dirty ? " *" : "");
-        DrawText(lbl.c_str(), lx + MeasureText("Cuerpo LaTeX:", 10) + 6,
+        DrawTextF(lbl.c_str(), lx + MeasureTextF("Cuerpo LaTeX:", 10) + 6,
             y, 10, { 80, 150, 200, 200 });
     }
 
@@ -161,14 +162,14 @@ void EntryEditor::draw_body_section(MathNode* sel, int lx, int lw,
 
     DrawRectangleRec(imp_r, imp_hov ? Color{ 50,80,140,255 } : Color{ 28,35,60,255 });
     DrawRectangleLinesEx(imp_r, 1.0f, { 60,100,200,200 });
-    DrawText("Importar", (int)imp_r.x + 4, (int)imp_r.y + 2, 9, WHITE);
+    DrawTextF("Importar", (int)imp_r.x + 4, (int)imp_r.y + 2, 9, WHITE);
 
     Color sav_bg = sav_hov ? Color{ 60,120,70,255 }
         : edit.body_dirty ? Color{ 40,90,50,255 }
     : Color{ 28,35,60,255 };
     DrawRectangleRec(sav_r, sav_bg);
     DrawRectangleLinesEx(sav_r, 1.0f, { 60,140,70,200 });
-    DrawText("Guardar", (int)sav_r.x + 4, (int)sav_r.y + 2, 9, WHITE);
+    DrawTextF("Guardar", (int)sav_r.x + 4, (int)sav_r.y + 2, 9, WHITE);
 
     if (imp_hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         show_file_manager = !show_file_manager;
@@ -241,7 +242,7 @@ void EntryEditor::draw_body_section(MathNode* sel, int lx, int lw,
                     char tmp[256];
                     int  copy = len < 255 ? len : 255;
                     strncpy(tmp, line_start, copy); tmp[copy] = '\0';
-                    DrawText(tmp, lx + 4, draw_y, font, { 200,210,220,210 });
+                    DrawTextF(tmp, lx + 4, draw_y, font, { 200,210,220,210 });
                 }
                 last_start = p + 1;
                 draw_y += line_h;
@@ -262,7 +263,7 @@ void EntryEditor::draw_body_section(MathNode* sel, int lx, int lw,
                 if (*p == '\n') last_nl = p;
             const char* last_line = last_nl ? last_nl + 1 : edit.body_buf;
             int cy = (int)area_r.y + 4 - (int)body_scroll + (n_lines - 1) * line_h;
-            int cx = lx + 4 + MeasureText(last_line, font);
+            int cx = lx + 4 + MeasureTextF(last_line, font);
             if (cy >= (int)area_r.y && cy < (int)(area_r.y + area_r.height))
                 DrawLine(cx, cy, cx, cy + font + 1, { 150,180,255,220 });
         }
@@ -293,14 +294,14 @@ void EntryEditor::draw_file_manager(MathNode* sel, int px, int py, Vector2 mouse
 
     // Header
     DrawRectangle(fm_x, fm_y, fm_w, 26, { 18,22,42,255 });
-    DrawText("Archivos .tex", fm_x + 10, fm_y + 7, 11, { 140,170,255,255 });
+    DrawTextF("Archivos .tex", fm_x + 10, fm_y + 7, 11, { 140,170,255,255 });
 
     // Botón refrescar
     Rectangle ref_r = { (float)(fm_x + fm_w - 60),(float)(fm_y + 4), 52.0f, 18.0f };
     bool ref_hov = CheckCollisionPointRec(mouse, ref_r);
     DrawRectangleRec(ref_r, ref_hov ? Color{ 40,60,120,255 } : Color{ 25,30,55,255 });
     DrawRectangleLinesEx(ref_r, 1.0f, { 50,80,160,200 });
-    DrawText("Refrescar", (int)ref_r.x + 3, (int)ref_r.y + 3, 9, WHITE);
+    DrawTextF("Refrescar", (int)ref_r.x + 3, (int)ref_r.y + 3, 9, WHITE);
     if (ref_hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) refresh_file_list();
 
     // Lista
@@ -323,7 +324,7 @@ void EntryEditor::draw_file_manager(MathNode* sel, int px, int py, Vector2 mouse
         Rectangle ir = { (float)fm_x,(float)iy,(float)fm_w,(float)item_h };
         bool hov = CheckCollisionPointRec(mouse, ir);
         DrawRectangleRec(ir, is_cur ? Color{ 30,50,100,255 } : hov ? Color{ 25,30,55,255 } : Color{ 0,0,0,0 });
-        DrawText(tex_files[i].c_str(), fm_x + 10, iy + 5, 10,
+        DrawTextF(tex_files[i].c_str(), fm_x + 10, iy + 5, 10,
             is_cur ? Color{ 150,200,255,255 } : Color{ 180,185,210,220 });
         if (hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             load_tex_file(tex_files[i], sel);
@@ -331,7 +332,7 @@ void EntryEditor::draw_file_manager(MathNode* sel, int px, int py, Vector2 mouse
         }
     }
     if (tex_files.empty())
-        DrawText("(carpeta vacia)", fm_x + 10, list_y + 8, 10, { 80,85,120,180 });
+        DrawTextF("(carpeta vacia)", fm_x + 10, list_y + 8, 10, { 80,85,120,180 });
     EndScissorMode();
 
     // Botón "Nuevo .tex"
@@ -339,7 +340,7 @@ void EntryEditor::draw_file_manager(MathNode* sel, int px, int py, Vector2 mouse
     bool new_hov = CheckCollisionPointRec(mouse, new_r);
     DrawRectangleRec(new_r, new_hov ? Color{ 30,70,40,255 } : Color{ 20,45,28,255 });
     DrawRectangleLinesEx(new_r, 1.0f, { 50,120,60,200 });
-    DrawText("Nuevo .tex para este nodo", (int)new_r.x + 10, (int)new_r.y + 3, 10, WHITE);
+    DrawTextF("Nuevo .tex para este nodo", (int)new_r.x + 10, (int)new_r.y + 3, 10, WHITE);
     if (new_hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && sel) {
         std::string safe = sel->code;
         for (char& c : safe)
@@ -357,18 +358,18 @@ void EntryEditor::draw_file_manager(MathNode* sel, int px, int py, Vector2 mouse
 void EntryEditor::draw_resource_list(MathNode* sel, int lx, int lw,
     int ph, int py, int& y, Vector2 mouse)
 {
-    DrawText("RECURSOS (en memoria)", lx, y, 11, { 100,130,100,220 }); y += 18;
+    DrawTextF("RECURSOS (en memoria)", lx, y, 11, { 100,130,100,220 }); y += 18;
     int to_remove = -1;
     for (int i = 0; i < (int)sel->resources.size() && y + 22 < py + ph - 60; i++) {
         auto& res = sel->resources[i];
         std::string line = "[" + res.kind + "] " + res.title;
         if ((int)line.size() > 54) line = line.substr(0, 53) + "...";
         DrawRectangle(lx, y, lw - 26, 20, { 18,22,18,255 });
-        DrawText(line.c_str(), lx + 4, y + 4, 10, { 170,200,170,210 });
+        DrawTextF(line.c_str(), lx + 4, y + 4, 10, { 170,200,170,210 });
         Rectangle del_r = { (float)(lx + lw - 22),(float)y, 20.0f, 20.0f };
         bool del_hov = CheckCollisionPointRec(mouse, del_r);
         DrawRectangleRec(del_r, del_hov ? Color{ 160,40,40,255 } : Color{ 40,20,20,200 });
-        DrawText("x", (int)del_r.x + 6, (int)del_r.y + 4, 11, WHITE);
+        DrawTextF("x", (int)del_r.x + 6, (int)del_r.y + 4, 11, WHITE);
         if (del_hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) to_remove = i;
         y += 24;
     }
@@ -382,7 +383,7 @@ void EntryEditor::draw_add_resource_form(MathNode* sel, int lx, int lw,
 {
     if (y + 70 >= py + ph) return;
     int& aid = state.toolbar.active_field;
-    DrawText("+ Nuevo recurso:", lx, y, 10, { 90,130,90,200 }); y += 14;
+    DrawTextF("+ Nuevo recurso:", lx, y, 10, { 90,130,90,200 }); y += 14;
 
     draw_text_field(edit.new_kind, 32, lx, y, 60, 18, 10, aid, F_KIND, mouse);
     draw_text_field(edit.new_title, 128, lx + 66, y, lw / 2 - 70, 18, 10, aid, F_TITLE, mouse);
@@ -394,7 +395,7 @@ void EntryEditor::draw_add_resource_form(MathNode* sel, int lx, int lw,
     bool add_hov = CheckCollisionPointRec(mouse, add_r);
     DrawRectangleRec(add_r, add_hov ? Color{ 40,100,50,255 } : Color{ 28,60,34,255 });
     DrawRectangleLinesEx(add_r, 1.0f, { 60,140,70,200 });
-    DrawText("Agregar", (int)add_r.x + 4, (int)add_r.y + 4, 10, WHITE);
+    DrawTextF("Agregar", (int)add_r.x + 4, (int)add_r.y + 4, 10, WHITE);
     if (add_hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && strlen(edit.new_title) > 0) {
         Resource r; r.kind = edit.new_kind; r.title = edit.new_title; r.content = edit.new_content;
         sel->resources.push_back(r);
@@ -450,15 +451,15 @@ void EntryEditor::draw(Vector2 mouse) {
     int y = pos_y + 38;
 
     if (!sel) {
-        DrawText("Selecciona una burbuja para editar.", lx, y + 10, 12, { 120,120,160,200 });
+        DrawTextF("Selecciona una burbuja para editar.", lx, y + 10, 12, { 120,120,160,200 });
         return;
     }
 
     // Cabecera del nodo
     std::string ninfo = sel->code + "  |  " + sel->label;
     if ((int)ninfo.size() > 62) ninfo = ninfo.substr(0, 61) + "...";
-    DrawText("Nodo:", lx, y, 11, { 90,100,140,200 });
-    DrawText(ninfo.c_str(), lx + 46, y, 11, { 160,200,160,230 });
+    DrawTextF("Nodo:", lx, y, 11, { 90,100,140,200 });
+    DrawTextF(ninfo.c_str(), lx + 46, y, 11, { 160,200,160,230 });
     y += 20;
     draw_h_line(lx, y, lx + lw); y += 10;
 
