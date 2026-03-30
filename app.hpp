@@ -114,24 +114,6 @@ struct AppState {
         std::shared_ptr<MathNode> root;
         std::shared_ptr<MathNode> node;
     };
-// Helper: obtener grafo de dependencias correspondiente al modo actual
-inline DepGraph& get_dep_graph_for(AppState& s) {
-    switch (s.mode) {
-    case ViewMode::MSC2020:  return s.dep_graph_msc;
-    case ViewMode::Mathlib:  return s.dep_graph_mathlib;
-    case ViewMode::Standard: return s.dep_graph_standard;
-    }
-    return s.dep_graph_msc;
-}
-
-inline const DepGraph& get_dep_graph_for_const(const AppState& s) {
-    switch (s.mode) {
-    case ViewMode::MSC2020:  return s.dep_graph_msc;
-    case ViewMode::Mathlib:  return s.dep_graph_mathlib;
-    case ViewMode::Standard: return s.dep_graph_standard;
-    }
-    return s.dep_graph_msc;
-}
     PendingNav pending_nav;
 
     MathNode* current() const {

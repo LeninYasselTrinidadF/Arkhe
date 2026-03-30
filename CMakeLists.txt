@@ -41,6 +41,12 @@ add_executable(Arkhe
     ui/panels/toolbar.cpp
     ui/panels/ubicaciones_panel.cpp
 
+    # ui/editor
+    ui/editor/edit_state.hpp
+    ui/editor/editor_io.cpp
+    ui/editor/editor_sections.cpp
+    
+
     # ui/widgets
     ui/widgets/panel_widget.cpp
 
@@ -50,6 +56,9 @@ add_executable(Arkhe
     ui/bubble/bubble_layout.cpp
     ui/bubble/bubble_controls.cpp
     
+    # ui/dep
+    ui/dep/dep_draw.cpp
+    ui/dep/dep_sim.cpp
 
     # ui raíz
     ui/bubble_view.cpp

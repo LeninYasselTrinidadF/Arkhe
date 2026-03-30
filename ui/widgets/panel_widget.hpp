@@ -40,6 +40,16 @@ protected:
     int  resize_ox = 0, resize_oy = 0;   // pos al empezar
     int  resize_opw = 0, resize_oph = 0;   // tamaño al empezar
 
+    // ── Ventana flotante modal ─────────────────────────────────────────────
+    // min_pw/min_ph: tamaño mínimo (los constexpr de la subclase).
+    // En el primer draw el tamaño real se calcula como SW()-2*MARGIN,
+    // clampeado a al menos min_pw×min_ph.
+    // Devuelve true si se hizo click en el botón cerrar.
+    bool draw_window_frame(int min_pw, int min_ph,
+        const char* title, Color title_col,
+        Color border_col, Vector2 mouse);
+
+public:
     // ── Helpers de input ──────────────────────────────────────────────────
     static void handle_text_input(char* buf, int buf_len);
 
@@ -58,16 +68,7 @@ protected:
     static void draw_h_line(int x1, int y, int x2,
         Color color = { 30, 30, 50, 200 });
 
-    // ── Ventana flotante modal ─────────────────────────────────────────────
-    // min_pw/min_ph: tamaño mínimo (los constexpr de la subclase).
-    // En el primer draw el tamaño real se calcula como SW()-2*MARGIN,
-    // clampeado a al menos min_pw×min_ph.
-    // Devuelve true si se hizo click en el botón cerrar.
-    bool draw_window_frame(int min_pw, int min_ph,
-        const char* title, Color title_col,
-        Color border_col, Vector2 mouse);
 
-public:
     explicit PanelWidget(AppState& s) : state(s) {}
     virtual ~PanelWidget() = default;
     virtual void draw(Vector2 mouse) = 0;
