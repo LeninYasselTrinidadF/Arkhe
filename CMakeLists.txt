@@ -15,7 +15,8 @@ find_package(nlohmann_json CONFIG REQUIRED)
 add_executable(Arkhe
     main.cpp
     data/msc_loader.cpp
-    data/mathlib_loader.cpp
+    data/mathlib_loader.cpp  
+    data/mathlib_gen.cpp
     data/crossref_loader.cpp
     data/nav_state.cpp
     data/dep_graph.cpp

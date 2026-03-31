@@ -180,28 +180,29 @@ bool PanelWidget::draw_window_frame(int min_pw, int min_ph,
         resize_edge = 0;
     }
 
-    // ── Aplicar resize ────────────────────────────────────────────────────────
+    // ── Aplicar resize ── panel_widget.cpp ───────────────────────────────────────
+
     if (resizing) {
         int dx = (int)mouse.x - resize_sx;
         int dy = (int)mouse.y - resize_sy;
 
-        if (resize_edge & 2) {                                          // borde derecho
-            cur_pw = std::max(min_pw, resize_opw + dx);
-        }
-        if (resize_edge & 8) {                                          // borde inferior
-            cur_ph = std::max(min_ph, resize_oph + dy);
-        }
-        if (resize_edge & 1) {                                          // borde izquierdo
-            int new_pw = std::max(min_pw, resize_opw - dx);
+        if (resize_edge & 2)                            // borde derecho
+            cur_pw = std::clamp(resize_opw + dx, min_pw, sw - pos_x);
+
+        if (resize_edge & 8)                            // borde inferior
+            cur_ph = std::clamp(resize_oph + dy, min_ph, sh - pos_y);
+
+        if (resize_edge & 1) {                          // borde izquierdo
+            int new_pw = std::clamp(resize_opw - dx, min_pw, resize_ox + resize_opw);
             pos_x = std::clamp(resize_ox + (resize_opw - new_pw), 0, sw - new_pw);
             cur_pw = new_pw;
         }
-        if (resize_edge & 4) {                                          // borde superior
-            int new_ph = std::max(min_ph, resize_oph - dy);
+        if (resize_edge & 4) {                          // borde superior
+            int new_ph = std::clamp(resize_oph - dy, min_ph, resize_oy + resize_oph - TOOLBAR_H);
             pos_y = std::clamp(resize_oy + (resize_oph - new_ph), TOOLBAR_H, sh - new_ph);
             cur_ph = new_ph;
         }
-        // Refrescar locales para el dibujo de este frame
+
         pw = cur_pw; ph = cur_ph;
         px = pos_x;  py = pos_y;
     }

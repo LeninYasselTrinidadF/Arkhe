@@ -12,20 +12,21 @@
 #include <cstdlib>
 #include <algorithm>
 #include <string>
+#include <iomanip>
 
 namespace fs = std::filesystem;
 
 // ── Helpers de texto ──────────────────────────────────────────────────────────
 
 static int wrapped_text(const char* text, int x, int y,
-                        int max_w, int font_size, Color color)
+    int max_w, int font_size, Color color)
 {
     std::string s(text);
     int line_y = y;
     while (!s.empty()) {
         int chars = 1;
         while (chars < (int)s.size() &&
-               MeasureTextF(s.substr(0, chars + 1).c_str(), font_size) < max_w)
+            MeasureTextF(s.substr(0, chars + 1).c_str(), font_size) < max_w)
             chars++;
         if (chars < (int)s.size() && s[chars] != ' ') {
             int sp = (int)s.rfind(' ', chars);
@@ -58,7 +59,7 @@ static std::string default_description(const MathNode* node) {
 // ── IO de .tex ────────────────────────────────────────────────────────────────
 
 std::string load_entry_tex(const std::string& entries_path,
-                           const std::string& code)
+    const std::string& code)
 {
     if (code.empty() || code == "ROOT") return "";
     std::string path = entries_path;
@@ -112,40 +113,66 @@ static std::string temp_dir() {
     return std::string(t) + "/arkhe_latex/";
 }
 
-static std::string wrap_tex(const std::string& raw) {
+// Convierte un Color de raylib a hex HTML (sin #), ej: {13,15,26,255} → "0D0F1A"
+static std::string color_to_hex(Color c) {
+    std::ostringstream ss;
+    ss << std::hex << std::uppercase << std::setfill('0')
+        << std::setw(2) << (int)c.r
+        << std::setw(2) << (int)c.g
+        << std::setw(2) << (int)c.b;
+    return ss.str();
+}
+
+// Genera el .tex con standalone y los colores del tema inyectados.
+// Si el .tex ya tiene \documentclass propio, se usa tal cual.
+static std::string wrap_tex(const std::string& raw,
+    const std::string& bg_hex,
+    const std::string& fg_hex)
+{
     if (raw.find("\\documentclass") != std::string::npos) return raw;
-    return "\\documentclass[12pt]{article}\n"
-           "\\usepackage{amsmath,amssymb,amsthm}\n"
-           "\\usepackage[margin=1.5cm]{geometry}\n"
-           "\\pagestyle{empty}\n"
-           "\\begin{document}\n"
-           + raw +
-           "\n\\end{document}\n";
+
+    return
+        "\\documentclass[preview, border=8pt]{standalone}\n"
+        "\\usepackage{amsmath,amssymb,amsthm,xcolor}\n"
+        "\\definecolor{fgcolor}{HTML}{" + fg_hex + "}\n" // Definir color explícito
+        "\\definecolor{bgcolor}{HTML}{" + bg_hex + "}\n"
+        "\\pagecolor{bgcolor}\n"
+        "\\begin{document}\n"
+        "\\color{fgcolor}\n"      // Forzar color de texto principal
+        "\\everymath{\\color{fgcolor}}\n"    // Forzar en fórmulas inline
+        "\\everydisplay{\\color{fgcolor}}\n" // Forzar en fórmulas block
+        + raw +
+        "\n\\end{document}\n";
 }
 
 void launch_latex_render(AppState& state,
-                         const std::string& code,
-                         const std::string& raw_tex)
+    const std::string& code,
+    const std::string& raw_tex)
 {
     auto& job = state.latex_render;
     if (job.tex_loaded) {
         UnloadTexture(job.texture);
-        job.texture    = {};
+        job.texture = {};
         job.tex_loaded = false;
     }
-    job.tex_code    = code;
-    job.state       = LatexRenderState::Compiling;
+    job.tex_code = code;
+    job.state = LatexRenderState::Compiling;
     job.error_msg.clear();
     job.thread_done = false;
 
-    std::string td      = temp_dir();
-    std::string src     = td + "entry.tex";
+    std::string td = temp_dir();
+    std::string src = td + "entry.tex";
     std::string png_out = td + "entry";
     job.png_path = td + "entry-1.png";
 
     std::string lx = state.toolbar.latex_path;
     std::string pp = state.toolbar.pdftoppm_path;
-    std::string w  = wrap_tex(raw_tex);
+
+    // Capturar colores del tema en el main thread antes del detach
+    std::string bg_hex = color_to_hex(g_theme.bg_app);
+    std::string fg_hex = color_to_hex(g_theme.text_primary);
+
+    std::string w = wrap_tex(raw_tex, bg_hex, fg_hex);
 
     std::thread([=, &job]() {
         try {
@@ -154,36 +181,72 @@ void launch_latex_render(AppState& state,
                 std::ofstream f(src);
                 if (!f) {
                     job.error_msg = "No se pudo escribir " + src;
-                    job.state     = LatexRenderState::Failed;
+                    job.state = LatexRenderState::Failed;
                     job.thread_done = true;
                     return;
                 }
                 f << w;
             }
-            std::system(("\"" + lx + "\" -interaction=nonstopmode "
-                         "-output-directory=\"" + td + "\" \"" + src +
-                         "\" > nul 2>&1").c_str());
+
+#ifdef _WIN32
+            std::string cmd_latex =
+                "cmd /c \""
+                "\"" + lx + "\""
+                " -interaction=nonstopmode"
+                " -output-directory=\"" + td + "\""
+                " \"" + src + "\""
+                " > nul 2>&1\"";
+
+            std::string cmd_ppm =
+                "cmd /c \""
+                "\"" + pp + "\""
+                " -r 144 -png"
+                " \"" + td + "entry.pdf\""
+                " \"" + png_out + "\""
+                " > nul 2>&1\"";
+#else
+            std::string cmd_latex =
+                "\"" + lx + "\""
+                " -interaction=nonstopmode"
+                " -output-directory=\"" + td + "\""
+                " \"" + src + "\""
+                " > /dev/null 2>&1";
+
+            std::string cmd_ppm =
+                "\"" + pp + "\""
+                " -r 144 -png"
+                " \"" + td + "entry.pdf\""
+                " \"" + png_out + "\""
+                " > /dev/null 2>&1";
+#endif
+
+            TraceLog(LOG_INFO, "[LaTeX] cmd_latex: %s", cmd_latex.c_str());
+            std::system(cmd_latex.c_str());
+
             if (!fs::exists(td + "entry.pdf")) {
-                job.error_msg   = "pdflatex fallo. Verifica la ruta en Ubicaciones.";
-                job.state       = LatexRenderState::Failed;
+                job.error_msg = "pdflatex fallo. Verifica la ruta en Ubicaciones.";
+                job.state = LatexRenderState::Failed;
                 job.thread_done = true;
                 return;
             }
-            std::system(("\"" + pp + "\" -r 144 -png \"" + td + "entry.pdf\" \"" +
-                         png_out + "\" > nul 2>&1").c_str());
+
+            TraceLog(LOG_INFO, "[LaTeX] cmd_ppm: %s", cmd_ppm.c_str());
+            std::system(cmd_ppm.c_str());
+
             if (!fs::exists(job.png_path)) {
-                job.error_msg   = "pdftoppm no genero el PNG.";
-                job.state       = LatexRenderState::Failed;
+                job.error_msg = "pdftoppm no genero el PNG.";
+                job.state = LatexRenderState::Failed;
                 job.thread_done = true;
                 return;
             }
             job.state = LatexRenderState::Ready;
-        } catch (std::exception& e) {
+        }
+        catch (std::exception& e) {
             job.error_msg = e.what();
-            job.state     = LatexRenderState::Failed;
+            job.state = LatexRenderState::Failed;
         }
         job.thread_done = true;
-    }).detach();
+        }).detach();
 }
 
 void poll_latex_render(AppState& state) {
@@ -192,7 +255,7 @@ void poll_latex_render(AppState& state) {
         job.thread_done && !job.tex_loaded)
     {
         if (fs::exists(job.png_path)) {
-            job.texture    = LoadTexture(job.png_path.c_str());
+            job.texture = LoadTexture(job.png_path.c_str());
             job.tex_loaded = (job.texture.id != 0);
             if (!job.tex_loaded)
                 job.error_msg = "LoadTexture fallo: " + job.png_path;
@@ -203,18 +266,18 @@ void poll_latex_render(AppState& state) {
 // ── Widget de LaTeX inline ────────────────────────────────────────────────────
 
 static int draw_latex_widget(AppState& state, int x, int y,
-                             int max_w, int max_h)
+    int max_w, int max_h)
 {
     const Theme& th = g_theme;
     auto& job = state.latex_render;
 
     if (job.state == LatexRenderState::Compiling) {
-        double t   = GetTime();
-        int    dots = (int)(t * 2.0) % 4;
+        double t = GetTime();
+        int dots = (int)(t * 2.0) % 4;
         std::string msg = "Compilando LaTeX";
         for (int d = 0; d < dots; d++) msg += '.';
         DrawTextF(msg.c_str(), x, y, 12, th.success);
-        float bw   = 180.0f;
+        float bw = 180.0f;
         float fill = (float)(fmod(t * 0.5, 1.0)) * bw;
         DrawRectangle(x, y + 18, (int)bw, 4, th_alpha(th.bg_button));
         DrawRectangle(x, y + 18, (int)fill, 4, th.success);
@@ -228,19 +291,15 @@ static int draw_latex_widget(AppState& state, int x, int y,
             x, y, max_w, 10, { 180, 80, 80, 220 });
         y += 6;
         DrawTextF("Verifica rutas en Ubicaciones > pdflatex / pdftoppm.",
-                 x, y, 10, th_alpha(th.text_dim));
+            x, y, 10, th_alpha(th.text_dim));
         return y + 16;
     }
     if (job.state == LatexRenderState::Ready && job.tex_loaded) {
         Texture2D& tex = job.texture;
-        float scale = std::min({ (float)max_w / tex.width,
-                                 (float)max_h / tex.height, 1.0f });
-        int dw = (int)(tex.width  * scale);
+        // Sin fondo ni borde: el PNG ya lleva el color del tema de fondo
+        float scale = std::min((float)max_w / tex.width, 1.0f);
+        int dw = (int)(tex.width * scale);
         int dh = (int)(tex.height * scale);
-        DrawRectangle(x - 2, y - 2, dw + 4, dh + 4, th.bg_panel);
-        DrawRectangleLinesEx({ (float)(x - 2), (float)(y - 2),
-                               (float)(dw + 4), (float)(dh + 4) },
-                             1.0f, th_alpha(th.border_panel));
         DrawTexturePro(tex,
             { 0, 0, (float)tex.width, (float)tex.height },
             { (float)x, (float)y, (float)dw, (float)dh },
@@ -253,12 +312,12 @@ static int draw_latex_widget(AppState& state, int x, int y,
 // ── draw_description_block ────────────────────────────────────────────────────
 
 int draw_description_block(AppState& state,
-                           MathNode* sel,
-                           const std::string& tex_target,
-                           const std::string& cached_raw,
-                           const std::string& cached_display,
-                           Vector2 mouse,
-                           int x, int y, int w, int scroll_h)
+    MathNode* sel,
+    const std::string& tex_target,
+    const std::string& cached_raw,
+    const std::string& cached_display,
+    Vector2 mouse,
+    int x, int y, int w, int scroll_h)
 {
     const Theme& th = g_theme;
 
@@ -269,23 +328,24 @@ int draw_description_block(AppState& state,
 
     if (!has_tex) {
         std::string desc = (sel && !sel->note.empty())
-                         ? sel->note
-                         : default_description(sel);
+            ? sel->note
+            : default_description(sel);
         y = wrapped_text(desc.c_str(), x, y, w / 2 - 30, 13, th.text_primary);
-    } else {
+    }
+    else {
         // Chip ".tex"
         {
             int tw = MeasureTextF(".tex", 11);
             DrawRectangle(x, y, tw + 14, 20,
-                          { th.success.r, th.success.g, th.success.b, 40 });
+                { th.success.r, th.success.g, th.success.b, 40 });
             DrawTextF(".tex", x + 7, y + 5, 11, th.success);
         }
 
         // Botón "Render LaTeX"
         auto& job = state.latex_render;
-        bool can_render = (job.state == LatexRenderState::Idle   ||
-                           job.state == LatexRenderState::Failed ||
-                           job.state == LatexRenderState::Ready);
+        bool can_render = (job.state == LatexRenderState::Idle ||
+            job.state == LatexRenderState::Failed ||
+            job.state == LatexRenderState::Ready);
         const char* render_label =
             (job.state == LatexRenderState::Ready && job.tex_loaded)
             ? "Re-render LaTeX" : "Render LaTeX";
@@ -298,7 +358,7 @@ int draw_description_block(AppState& state,
         if (can_render) {
             Color bg_btn = btn_hov
                 ? Color{ th.success.r, th.success.g, th.success.b, 255 }
-                : Color{ th.success.r, th.success.g, th.success.b, 80 };
+            : Color{ th.success.r, th.success.g, th.success.b, 80 };
             if (g_skin.button.valid())
                 g_skin.button.draw(btn_r, bg_btn);
             else {
@@ -312,9 +372,9 @@ int draw_description_block(AppState& state,
         y += 24;
 
         if (job.tex_code == tex_target &&
-            (job.state == LatexRenderState::Ready    ||
-             job.state == LatexRenderState::Compiling ||
-             job.state == LatexRenderState::Failed))
+            (job.state == LatexRenderState::Ready ||
+                job.state == LatexRenderState::Compiling ||
+                job.state == LatexRenderState::Failed))
         {
             y = draw_latex_widget(state, x, y, w - 20, scroll_h - 60);
             y += 10;

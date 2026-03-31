@@ -3,7 +3,8 @@
 #include "../constants.hpp"
 
 class UbicacionesPanel : public PanelWidget {
-    static constexpr int PW = 600, PH = 360;
+    // PH ampliado para incluir la sección de generadores Mathlib
+    static constexpr int PW = 620, PH = 520;
 
 public:
     explicit UbicacionesPanel(AppState& s) : PanelWidget(s) {

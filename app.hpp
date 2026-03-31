@@ -2,6 +2,7 @@
 #include "data/math_node.hpp"
 #include "data/crossref_loader.hpp"
 #include "data/dep_graph.hpp"
+#include "data/mathlib_gen.hpp"
 #include "ui/core/texture_cache.hpp"
 #include <string>
 #include <vector>
@@ -33,6 +34,7 @@ struct ToolbarState {
     char graphics_path[512] = "assets/graphics/";
     char latex_path[512]    = "C:/texlive/2025/bin/windows/pdflatex.exe";
     char pdftoppm_path[512] = "C:/texlive/2025/bin/windows/pdftoppm.exe";
+    char mathlib_src_path[512] = "";   // ruta al repo mathlib4 (para generadores)
 
     // Flags de activacion
     bool assets_changed = false;
@@ -103,8 +105,12 @@ struct AppState {
     DepGraph    dep_graph;
 
     // Posición/ajustes temporales de layout: key = "MSC:ID" | "ML:ID" | "STD:ID"
-    bool position_mode_active = false; // cuando true, clicks en nodos no navegan y se pueden mover
+    bool position_mode_active = false;
     std::unordered_map<std::string, Vector2> temp_positions;
+
+    // ── Generadores Mathlib ───────────────────────────────────────────────────
+    MathlibGenJob mathlib_layout_job;   // estado del hilo generador de layout
+    MathlibGenJob mathlib_deps_job;     // estado del hilo generador de deps
 
     struct PendingNav {
         bool        active = false;

@@ -25,15 +25,15 @@ void DepGraph::load(const std::string& deps_json_path) {
         if (!val.is_object()) continue;
 
         DepNode node;
-        node.id    = code;
+        node.id = code;
         node.label = val.value("label", code);
 
         if (val.contains("depends_on") && val["depends_on"].is_array()) {
             for (auto& dep : val["depends_on"]) {
                 if (dep.is_string()) {
                     std::string dep_str = dep.get<std::string>();
-                    // Guardia: evitar strings vacíos o demasiado largos
-                    if (!dep_str.empty() && dep_str.size() < 64)
+                    // Mathlib paths can be up to ~100 chars; 256 is safe
+                    if (!dep_str.empty() && dep_str.size() < 256)
                         node.depends_on.push_back(std::move(dep_str));
                 }
             }
@@ -112,7 +112,6 @@ void DepGraph::build_prefix_index() {
     for (auto& [id, node] : nodes_) {
         if (id.size() >= 2) {
             std::string prefix = id.substr(0, 2);
-            // Solo guardar el primer nodo encontrado por prefijo (estable)
             area_prefix_.emplace(prefix, id);
         }
     }

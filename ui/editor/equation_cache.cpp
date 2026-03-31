@@ -65,18 +65,26 @@ void EquationCache::compile_worker(EqEntry*    entry,
     }
 
     // ── 2. pdflatex ───────────────────────────────────────────────────────────
-#ifdef _WIN32
-    const std::string null_dev = "> nul 2>&1";
-#else
-    const std::string null_dev = "> /dev/null 2>&1";
-#endif
-
-    // Construir comando con comillas para rutas con espacios
-    std::string cmd_latex =
-        "\"" + latex_exe + "\""
-        " -interaction=nonstopmode"
-        " -output-directory=\"" + work_dir + "\""
-        " \"" + tex_path + "\" " + null_dev;
+    #ifdef _WIN32
+        const std::string null_dev = "> nul 2>&1";
+        // En Windows, cmd.exe /c necesita que todo el comando vaya envuelto
+        // en comillas exteriores cuando el ejecutable también va entre comillas.
+        // Forma: cmd /c ""exe" args"
+        std::string cmd_latex =
+            "cmd /c \""
+            "\"" + latex_exe + "\""
+            " -interaction=nonstopmode"
+            " -output-directory=\"" + work_dir + "\""
+            " \"" + tex_path + "\""
+            "\" " + null_dev;
+    #else
+        const std::string null_dev = "> /dev/null 2>&1";
+        std::string cmd_latex =
+            "\"" + latex_exe + "\""
+            " -interaction=nonstopmode"
+            " -output-directory=\"" + work_dir + "\""
+            " \"" + tex_path + "\" " + null_dev;
+    #endif
 
     if (std::system(cmd_latex.c_str()) != 0) {
         entry->failed = true;
@@ -85,11 +93,21 @@ void EquationCache::compile_worker(EqEntry*    entry,
     }
 
     // ── 3. pdftoppm → PNG ────────────────────────────────────────────────────
-    std::string cmd_ppm =
-        "\"" + pdftoppm_exe + "\""
-        " -r 150 -png"
-        " \"" + pdf_path + "\""
-        " \"" + png_prefix + "\" " + null_dev;
+    #ifdef _WIN32
+        std::string cmd_ppm =
+            "cmd /c \""
+            "\"" + pdftoppm_exe + "\""
+            " -r 150 -png"
+            " \"" + pdf_path + "\""
+            " \"" + png_prefix + "\""
+            "\" " + null_dev;
+    #else
+        std::string cmd_ppm =
+            "\"" + pdftoppm_exe + "\""
+            " -r 150 -png"
+            " \"" + pdf_path + "\""
+            " \"" + png_prefix + "\" " + null_dev;
+    #endif
 
     std::system(cmd_ppm.c_str());
 

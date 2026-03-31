@@ -104,8 +104,9 @@ void EntryEditor::draw(Vector2 mouse) {
         return;
     }
 
-    const int pw = 540, ph = 560;
-    const int lx = pos_x + 14, lw = pw - 28;
+    
+    const int pw = cur_pw, ph = cur_ph;
+    const int lx = pos_x + 14, lw = pw - 28; 
     int y = pos_y + 38;
 
     if (!sel) {
