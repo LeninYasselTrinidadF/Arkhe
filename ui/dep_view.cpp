@@ -35,7 +35,7 @@ void dep_view_init(AppState& state, const std::string& focus_id) {
         for (auto& d : use_graph.get_dependents(focus_id))
             if (!d.empty() && d.size() < 64) visible[d] = true;
 
-        if (visible.size() < 7) {
+        if (visible.size() < 12) {
             for (auto& d1 : focus->depends_on) {
                 const DepNode* n1 = use_graph.get(d1);
                 if (!n1) continue;

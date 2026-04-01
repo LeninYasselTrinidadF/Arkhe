@@ -8,20 +8,22 @@
 //
 // Uso:
 //   g_fonts.load("assets/fonts/myfont.ttf");   // en main(), tras InitWindow
-//   g_fonts.base_size = 14;                     // ajustable por el usuario
+//   g_fonts.base_size = 30;                     // ajustable por el usuario (24–64)
 //   DrawTextF("Hola", x, y, 12, WHITE);         // reemplaza DrawText()
 //   int w = MeasureTextF("Hola", 12);           // reemplaza MeasureText()
 //
 // El parámetro `size` en DrawTextF/MeasureTextF es un tamaño RELATIVO:
-//   size final = size * (base_size / 14.0f)
-// Con base_size=21 (default) toda la UI se renderiza a 1.5× el tamaño original.
-// Cambiar base_size en ToolbarState::theme_id o en Config para ajuste global.
+//   size final = size * (base_size / 24.0f)
+// Con base_size=24 → factor 1.0× (mínimo)
+// Con base_size=30 → factor 1.25× (default)
+// Con base_size=64 → factor 2.67× (máximo)
+// Cambiar base_size desde el ConfigPanel para ajuste global.
 // ─────────────────────────────────────────────────────────────────────────────
 
 struct FontManager {
     Font    font = {};
     bool    loaded = false;
-    float   base_size = 21.0f;   // tamaño base del usuario (8–32) — default 21 = 1.5× original
+    float   base_size = 30.0f;   // tamaño base del usuario (24–64) — 30 = default, 24 = factor 1×
 
     // Carga la fuente desde path. Genera glifos hasta char 1024 para cubrir
     // símbolos matemáticos básicos del rango Latin Extended.
@@ -34,7 +36,7 @@ struct FontManager {
     // Escala un tamaño relativo al base_size del usuario.
     inline int scale(int size) const {
         if (!loaded) return size;
-        return std::max(6, (int)(size * base_size / 14.0f + 0.5f));
+        return std::max(6, (int)(size * base_size / 24.0f + 0.5f));
     }
 
     // Equivalente a DrawText() pero usa la fuente custom con escala.

@@ -65,11 +65,14 @@ bool draw_arrow(int cx, int cy, bool left, Vector2 mouse) {
 void draw_mode_switcher(AppState& state, Vector2 mouse) {
     const Theme& th = g_theme;
     const char* mname = mode_name(state.mode);
-    int nw = MeasureTextF(mname, 26);
-    int bar_w = nw + 130;
+    int lbl_sz = 20;                            // tamaño lógico del label (se escala)
+    int nw = MeasureTextF(mname, lbl_sz);
+    int arrow_w = g_fonts.scale(50);             // espacio para cada flecha (escala)
+    int bar_w = nw + arrow_w * 2 + g_fonts.scale(16);
     int bar_x = CX() - bar_w / 2;
-    int bar_y = UI_TOP() + 10;
-    int bar_h = 40;
+    int lbl_h = MeasureTextF("Ag", lbl_sz);
+    int bar_h = lbl_h + g_fonts.scale(16);    // padding vertical escalado
+    int bar_y = UI_TOP() + g_fonts.scale(8);
 
     if (g_skin.button.valid())
         g_skin.button.draw((float)bar_x, (float)bar_y,
@@ -78,22 +81,30 @@ void draw_mode_switcher(AppState& state, Vector2 mouse) {
         DrawRectangle(bar_x, bar_y, bar_w, bar_h, th_alpha(th.ctrl_bg));
         DrawRectangleLines(bar_x, bar_y, bar_w, bar_h, th.ctrl_border);
     }
-    DrawLine(bar_x + 50, bar_y + 6, bar_x + 50, bar_y + bar_h - 6, th_alpha(th.ctrl_text_dim));
-    DrawLine(bar_x + bar_w - 50, bar_y + 6, bar_x + bar_w - 50, bar_y + bar_h - 6,
-        th_alpha(th.ctrl_text_dim));
-    DrawTextF(mname, CX() - nw / 2, bar_y + 8, 26, th.ctrl_text);
+    // Separadores verticales
+    DrawLine(bar_x + arrow_w, bar_y + g_fonts.scale(5),
+        bar_x + arrow_w, bar_y + bar_h - g_fonts.scale(5), th_alpha(th.ctrl_text_dim));
+    DrawLine(bar_x + bar_w - arrow_w, bar_y + g_fonts.scale(5),
+        bar_x + bar_w - arrow_w, bar_y + bar_h - g_fonts.scale(5), th_alpha(th.ctrl_text_dim));
 
-    if (draw_arrow(bar_x + 25, bar_y + bar_h / 2, true, mouse)) state.mode = mode_prev(state.mode);
-    if (draw_arrow(bar_x + bar_w - 25, bar_y + bar_h / 2, false, mouse)) state.mode = mode_next(state.mode);
+    // Label centrado
+    int text_y = bar_y + (bar_h - lbl_h) / 2;
+    DrawTextF(mname, CX() - nw / 2, text_y, lbl_sz, th.ctrl_text);
+
+    if (draw_arrow(bar_x + arrow_w / 2, bar_y + bar_h / 2, true, mouse)) state.mode = mode_prev(state.mode);
+    if (draw_arrow(bar_x + bar_w - arrow_w / 2, bar_y + bar_h / 2, false, mouse)) state.mode = mode_next(state.mode);
 }
 
 // ── draw_zoom_buttons ─────────────────────────────────────────────────────────
 
 void draw_zoom_buttons(Camera2D& cam, Vector2 mouse) {
     const Theme& th = g_theme;
-    int bx = 14, by = g_split_y - 86, bw = 36, bh = 36;
-    Rectangle rp = { (float)bx, (float)by,        (float)bw, (float)bh };
-    Rectangle rm = { (float)bx, (float)(by + 42), (float)bw, (float)bh };
+    // Tamaño del botón escala con la fuente: se basa en el texto "+" escalado
+    int btn_sz = MeasureTextF("+", 20) + g_fonts.scale(14);  // cuadrado
+    int bx = 14;
+    int by = g_split_y - btn_sz * 2 - g_fonts.scale(20);
+    Rectangle rp = { (float)bx, (float)by,              (float)btn_sz, (float)btn_sz };
+    Rectangle rm = { (float)bx, (float)(by + btn_sz + g_fonts.scale(6)), (float)btn_sz, (float)btn_sz };
     bool hp = CheckCollisionPointRec(mouse, rp);
     bool hm = CheckCollisionPointRec(mouse, rm);
 
@@ -106,8 +117,16 @@ void draw_zoom_buttons(Camera2D& cam, Vector2 mouse) {
         }
         };
     draw_btn(rp, hp); draw_btn(rm, hm);
-    DrawTextF("+", bx + 9, by + 7, 27, hp ? th.ctrl_text : th_alpha(th.ctrl_text_dim));
-    DrawTextF("-", bx + 11, by + 49, 27, hm ? th.ctrl_text : th_alpha(th.ctrl_text_dim));
+
+    // Centrar "+" y "-" dentro de cada botón
+    int sym_sz = 20;
+    int sym_w = MeasureTextF("+", sym_sz);
+    int sym_h = MeasureTextF("A", sym_sz);
+    DrawTextF("+", (int)rp.x + (btn_sz - sym_w) / 2, (int)rp.y + (btn_sz - sym_h) / 2,
+        sym_sz, hp ? th.ctrl_text : th_alpha(th.ctrl_text_dim));
+    DrawTextF("-", (int)rm.x + (btn_sz - MeasureTextF("-", sym_sz)) / 2,
+        (int)rm.y + (btn_sz - sym_h) / 2,
+        sym_sz, hm ? th.ctrl_text : th_alpha(th.ctrl_text_dim));
 
     if (!overlay::blocks_mouse(mouse)) {
         if (hp && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
@@ -117,16 +136,41 @@ void draw_zoom_buttons(Camera2D& cam, Vector2 mouse) {
     }
     char zbuf[16];
     snprintf(zbuf, sizeof(zbuf), "%.0f%%", cam.zoom * 100.0f);
-    int tw = MeasureTextF(zbuf, 17);
-    DrawTextF(zbuf, bx + bw / 2 - tw / 2, by + bh * 2 + 10, 17, th_alpha(th.ctrl_text_dim));
+    int lbl_sz = 11;
+    int tw = MeasureTextF(zbuf, lbl_sz);
+    DrawTextF(zbuf, bx + btn_sz / 2 - tw / 2,
+        (int)rm.y + btn_sz + g_fonts.scale(4), lbl_sz, th_alpha(th.ctrl_text_dim));
 }
 
-// ── Helper interno: botón de canvas estándar ──────────────────────────────────
+// ── Helper interno: botón de canvas con tamaño dinámico ──────────────────────
+// El ancho y alto se calculan desde el texto escalado + padding proporcional.
+// No hay valores hardcodeados: todo crece con g_fonts.base_size.
 
+static constexpr int BTN_FONT = 14;   // tamaño lógico del texto (se escala)
+static constexpr int BTN_PAD_X = 10;   // half-padding horizontal lógico
+static constexpr int BTN_PAD_Y = 7;   // half-padding vertical   lógico
+
+// Calcula bw y bh para un label dado con la escala actual de fuente.
+static void btn_dims(const char* label, float& bw, float& bh) {
+    int tw = MeasureTextF(label, BTN_FONT);
+    int font_h = MeasureTextF("Ag", BTN_FONT);          // altura real escalada
+    int padx = g_fonts.scale(BTN_PAD_X);
+    int pady = g_fonts.scale(BTN_PAD_Y);
+    bw = (float)(tw + padx * 2);
+    bh = (float)(font_h + pady * 2);
+}
+
+// Dibuja el botón y devuelve true si fue clickeado.
 static bool canvas_btn_impl(const Theme& th, Vector2 mouse, bool canvas_blocked,
-    float bx, float by, float bw, float bh,
-    const char* label, bool enabled, bool active = false)
+    float bx, float by,
+    const char* label, bool enabled, bool active = false,
+    float* out_bw = nullptr, float* out_bh = nullptr)
 {
+    float bw, bh;
+    btn_dims(label, bw, bh);
+    if (out_bw) *out_bw = bw;
+    if (out_bh) *out_bh = bh;
+
     bool hov = enabled
         && CheckCollisionPointRec(mouse, { bx, by, bw, bh })
         && !canvas_blocked;
@@ -134,13 +178,11 @@ static bool canvas_btn_impl(const Theme& th, Vector2 mouse, bool canvas_blocked,
     Color bg = active ? th.accent
         : hov ? th.bg_button_hover
         : enabled ? th_alpha(th.bg_button)
-        : Color{ th.bg_button.r, th.bg_button.g,
-                th.bg_button.b, 80 };
-    Color text = active ? th.bg_app
+        : Color{ th.bg_button.r, th.bg_button.g, th.bg_button.b, 80 };
+    Color text_col = active ? th.bg_app
         : hov ? th.ctrl_text
         : enabled ? th_alpha(th.ctrl_text_dim)
-        : Color{ th.ctrl_text_dim.r, th.ctrl_text_dim.g,
-                th.ctrl_text_dim.b, 80 };
+        : Color{ th.ctrl_text_dim.r, th.ctrl_text_dim.g, th.ctrl_text_dim.b, 80 };
     Color border = active ? th.accent
         : enabled ? th.ctrl_border
         : th_alpha(th.border);
@@ -151,21 +193,30 @@ static bool canvas_btn_impl(const Theme& th, Vector2 mouse, bool canvas_blocked,
         DrawRectangleRec({ bx, by, bw, bh }, bg);
         DrawRectangleLinesEx({ bx, by, bw, bh }, active ? 2.f : 1.f, border);
     }
-    DrawTextF(label, (int)bx + 8, (int)by + 7, 19, text);
-    return hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+
+    // Texto centrado verticalmente
+    int font_h = MeasureTextF("Ag", BTN_FONT);
+    int pady = g_fonts.scale(BTN_PAD_Y);
+    int padx = g_fonts.scale(BTN_PAD_X);
+    DrawTextF(label, (int)bx + padx, (int)by + pady, BTN_FONT, text_col);
+
+    return hov && enabled && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
 }
+
+// Gap entre botones: también escala con la fuente
+static float btn_gap() { return (float)g_fonts.scale(6); }
 
 // ── draw_canvas_buttons (modo Burbujas) ───────────────────────────────────────
 
 void draw_canvas_buttons(AppState& state, Vector2 mouse, bool canvas_blocked) {
     const Theme& th = g_theme;
     const float  BX = 14.f;
-    const float  BH = 32.f;
-    const float  GAP = 8.f;
     float by = (float)(UI_TOP() + 10);
+    float bw, bh;
 
     // ── [Casa] ────────────────────────────────────────────────────────────────
-    if (canvas_btn_impl(th, mouse, canvas_blocked, BX, by, 90.f, BH, "[Casa]", true)) {
+    if (canvas_btn_impl(th, mouse, canvas_blocked, BX, by, "[Casa]", true,
+        false, &bw, &bh)) {
         if (state.nav_stack.size() > 1) {
             auto root_node = state.nav_stack[0];
             state.nav_stack.clear();
@@ -175,7 +226,7 @@ void draw_canvas_buttons(AppState& state, Vector2 mouse, bool canvas_blocked) {
             state.resource_scroll = 0.f;
         }
     }
-    by += BH + GAP;
+    by += bh + btn_gap();
 
     // ── Toggle Burbujas ↔ Dependencias ────────────────────────────────────────
     const DepGraph& use_graph = get_dep_graph_for_const(state);
@@ -184,8 +235,8 @@ void draw_canvas_buttons(AppState& state, Vector2 mouse, bool canvas_blocked) {
     const char* toggle_lbl = dep_active ? "Burbujas" : "Dependencias";
     bool enabled = dep_active || dep_loaded;
 
-    if (canvas_btn_impl(th, mouse, canvas_blocked, BX, by, 138.f, BH,
-        toggle_lbl, enabled, dep_active)) {
+    if (canvas_btn_impl(th, mouse, canvas_blocked, BX, by,
+        toggle_lbl, enabled, dep_active, &bw, &bh)) {
         if (dep_active) {
             state.dep_view_active = false;
         }
@@ -195,27 +246,29 @@ void draw_canvas_buttons(AppState& state, Vector2 mouse, bool canvas_blocked) {
         }
     }
     if (!dep_loaded) {
-        int tw = MeasureTextF("(sin deps.json)", 11);
+        int hint_sz = 10;
+        int tw = MeasureTextF("(sin deps.json)", hint_sz);
         DrawTextF("(sin deps.json)",
-            (int)(BX + 138.f / 2 - tw / 2), (int)(by + BH + 2),
-            11, ColorAlpha(th.text_dim, 0.4f));
-        by += 14.f;
+            (int)(BX + bw / 2 - tw / 2), (int)(by + bh + 2),
+            hint_sz, ColorAlpha(th.text_dim, 0.4f));
+        by += (float)g_fonts.scale(hint_sz) + 4.f;
     }
-    by += BH + GAP;
+    by += bh + btn_gap();
 
     // ── Posición ──────────────────────────────────────────────────────────────
     bool pos_active = state.position_mode_active;
-    if (canvas_btn_impl(th, mouse, canvas_blocked, BX, by, 100.f, BH,
-        "Posicion", true, pos_active)) {
+    if (canvas_btn_impl(th, mouse, canvas_blocked, BX, by,
+        "Posicion", true, pos_active, &bw, &bh)) {
         state.position_mode_active = !state.position_mode_active;
         if (!state.position_mode_active)
             position_state_save(state);
     }
-    by += BH + GAP;
+    by += bh + btn_gap();
 
     // ── < Atrás ───────────────────────────────────────────────────────────────
     if (!dep_active && state.can_go_back()) {
-        if (canvas_btn_impl(th, mouse, canvas_blocked, BX, by, 100.f, BH, "< Atras", true))
+        if (canvas_btn_impl(th, mouse, canvas_blocked, BX, by,
+            "< Atras", true, false, &bw, &bh))
             state.pop();
     }
 }
@@ -227,48 +280,43 @@ void draw_dep_canvas_buttons(AppState& state, Camera2D& dep_cam,
 {
     const Theme& th = g_theme;
     const float  BX = 14.f;
-    const float  BH = 32.f;
-    const float  GAP = 8.f;
     float by = (float)(UI_TOP() + 10);
+    float bw, bh;
 
     // ── [Casa] — resetea cámara y vuelve al nodo raíz del grafo ──────────────
-    if (canvas_btn_impl(th, mouse, canvas_blocked, BX, by, 90.f, BH, "[Casa]", true)) {
+    if (canvas_btn_impl(th, mouse, canvas_blocked, BX, by, "[Casa]", true,
+        false, &bw, &bh)) {
         dep_cam.target = { 0.f, 0.f };
         dep_cam.zoom = 1.f;
-        // Re-enfocar en el nodo raíz del grafo activo
         const DepGraph& g = get_dep_graph_for_const(state);
         if (!g.empty())
             dep_view_init(state, g.nodes().begin()->second.id);
     }
-    by += BH + GAP;
+    by += bh + btn_gap();
 
-    // ── Burbujas — vuelve a la vista de árbol (simétrico al botón "Dependencias")
-    if (canvas_btn_impl(th, mouse, canvas_blocked, BX, by, 100.f, BH, "Burbujas", true)) {
+    // ── Burbujas — vuelve a la vista de árbol ─────────────────────────────────
+    if (canvas_btn_impl(th, mouse, canvas_blocked, BX, by, "Burbujas", true,
+        false, &bw, &bh))
         state.dep_view_active = false;
-    }
-    by += BH + GAP;
+    by += bh + btn_gap();
 
     // ── Posición ──────────────────────────────────────────────────────────────
     bool pos_active = state.position_mode_active;
-    if (canvas_btn_impl(th, mouse, canvas_blocked, BX, by, 100.f, BH,
-        "Posicion", true, pos_active)) {
+    if (canvas_btn_impl(th, mouse, canvas_blocked, BX, by,
+        "Posicion", true, pos_active, &bw, &bh)) {
         state.position_mode_active = !state.position_mode_active;
         if (!state.position_mode_active)
             position_state_save(state);
     }
-    by += BH + GAP;
+    by += bh + btn_gap();
 
-    // ── < Atrás — sube un nivel en el historial del grafo de deps ─────────────
-    // Guarda el historial de nodos visitados en dep_view con una pila interna.
-    // Por ahora: si hay un nodo padre en el grafo, re-enfoca en él.
+    // ── < Atrás — sube al padre en el grafo de deps ───────────────────────────
     if (!state.dep_focus_id.empty()) {
         const DepGraph& g = get_dep_graph_for_const(state);
-        // Buscamos si el foco actual tiene dependientes (alguien que lo apunta)
         auto parents = g.get_dependents(state.dep_focus_id);
         bool has_parent = !parents.empty();
-        if (canvas_btn_impl(th, mouse, canvas_blocked, BX, by, 100.f, BH,
-            "< Atras", has_parent)) {
+        if (canvas_btn_impl(th, mouse, canvas_blocked, BX, by,
+            "< Atras", has_parent, false, &bw, &bh))
             dep_view_init(state, parents[0]);
-        }
     }
 }

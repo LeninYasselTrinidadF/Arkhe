@@ -10,7 +10,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 class ConfigPanel : public PanelWidget {
     static constexpr int PW = 460;
-    static constexpr int PH = 280;
+    static constexpr int PH = 300;
 
     // ── Sección Fuente ────────────────────────────────────────────────────────
     char font_path_buf[512] = "assets/fonts/main.ttf";

@@ -30,8 +30,10 @@ void ConfigPanel::load_config() {
         json j = json::parse(f);
         if (j.contains("font_path"))
             strncpy(font_path_buf, j["font_path"].get<std::string>().c_str(), 511);
-        if (j.contains("font_base_size"))
-            g_fonts.base_size = j["font_base_size"].get<float>();
+        if (j.contains("font_base_size")) {
+            float sz = j["font_base_size"].get<float>();
+            g_fonts.base_size = std::clamp(sz, 24.0f, 64.0f);
+        }
     }
     catch (...) {}
 }
@@ -81,7 +83,7 @@ void ConfigPanel::draw_font_section(int lx, int fw, int& y, Vector2 mouse) {
     DrawTextF("Tamaño base", lx, y, 10, th_alpha(th.text_dim));
     y += 13;
 
-    constexpr float F_MIN = 8.0f, F_MAX = 28.0f;
+    constexpr float F_MIN = 24.0f, F_MAX = 64.0f;
     float& sz = g_fonts.base_size;
 
     int track_w = fw - 56;
