@@ -15,14 +15,12 @@ find_package(nlohmann_json CONFIG REQUIRED)
 add_executable(Arkhe
     main.cpp
     data/msc_loader.cpp
-    data/mathlib_loader.cpp
+    data/mathlib_loader.cpp  
     data/mathlib_gen.cpp
     data/crossref_loader.cpp
     data/nav_state.cpp
     data/dep_graph.cpp
-    data/terminal_input.cpp
-    data/vscode_bridge.cpp
-
+    
     # ui/core
     ui/core/font_manager.cpp
     ui/core/nine_patch.cpp
@@ -45,11 +43,11 @@ add_executable(Arkhe
     ui/panels/ubicaciones_panel.cpp
 
     # ui/editor
-    ui/editor/edit_state.hpp
+    ui/editor/edit_state.hpp       # header-only, listado por claridad
     ui/editor/editor_io.cpp
     ui/editor/editor_sections.cpp
-    ui/editor/body_parser.cpp
-    ui/editor/equation_cache.cpp
+    ui/editor/body_parser.cpp      # ← nuevo: parser de segmentos LaTeX
+    ui/editor/equation_cache.cpp   # ← nuevo: caché async de ecuaciones
 
     # ui/widgets
     ui/widgets/panel_widget.cpp
@@ -59,7 +57,7 @@ add_executable(Arkhe
     ui/bubble/bubble_draw.cpp
     ui/bubble/bubble_layout.cpp
     ui/bubble/bubble_controls.cpp
-
+    
     # ui/dep
     ui/dep/dep_draw.cpp
     ui/dep/dep_sim.cpp
@@ -72,25 +70,19 @@ add_executable(Arkhe
     search/loogle.cpp
 )
 
+
 target_sources(Arkhe PRIVATE
     vendor/tinyfiledialogs.c
 )
-
 target_include_directories(Arkhe PRIVATE
     vendor/
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/ui
 )
-
 target_link_libraries(Arkhe PRIVATE
     raylib
     nlohmann_json::nlohmann_json
 )
-
-# Consola visible + ventana raylib (necesario para terminal_input)
-if(WIN32)
-    target_link_options(Arkhe PRIVATE "/SUBSYSTEM:CONSOLE")
-endif()
 
 add_custom_command(TARGET Arkhe POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory

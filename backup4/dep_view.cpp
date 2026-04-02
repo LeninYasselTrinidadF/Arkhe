@@ -1,7 +1,7 @@
 #include "dep_view.hpp"
 #include "dep/dep_sim.hpp"
 #include "dep/dep_draw.hpp"
-#include "bubble/bubble_controls.hpp"
+#include "bubble/bubble_controls.hpp"   // ← controles compartidos
 #include "data/position_state.hpp"
 #include "core/theme.hpp"
 #include "core/font_manager.hpp"
@@ -9,36 +9,12 @@
 #include "constants.hpp"
 #include "raylib.h"
 #include "raymath.h"
-#include "../data/vscode_bridge.hpp"
 #include <unordered_map>
 #include <unordered_set>
 #include <string>
 #include <algorithm>
 #include <cstdio>
 #include <cmath>
-
-// ── Botón "→ VS" — reutilizado también en dep_view ───────────────────────────
-static void draw_vscode_button(AppState& state, Vector2 mouse) {
-    const Theme& th = g_theme;
-    const int bw = 54, bh = 22;
-    const int bx = 10;
-    const int by = g_split_y - bh - 10;
-
-    Rectangle r = { (float)bx, (float)by, (float)bw, (float)bh };
-    bool hov = CheckCollisionPointRec(mouse, r);
-
-    DrawRectangleRec(r, hov ? th.bg_button_hover : th_alpha(th.bg_button));
-    DrawRectangleLinesEx(r, 1.f, th_alpha(th.ctrl_border));
-
-    const char* lbl = "\xE2\x86\x92 VS";   // → VS  (UTF-8)
-    int tw = MeasureTextF(lbl, 11);
-    DrawTextF(lbl, bx + (bw - tw) / 2, by + (bh - 11) / 2, 11, th.ctrl_text);
-
-    if (hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-        bridge_launch_vscode(state);
-        TraceLog(LOG_INFO, "dep_view: VS Code lanzado desde botón");
-    }
-}
 
 // ── dep_view_init ─────────────────────────────────────────────────────────────
 
@@ -126,9 +102,9 @@ void draw_dep_view(AppState& state, Camera2D& dep_cam, Vector2 mouse) {
         DrawTextF(msg, (cw - tw) / 2, UI_TOP() + ch / 2, 18,
             ColorAlpha(th.text_dim, 0.6f));
 
+        // Aun sin datos: mostrar los botones de canvas para poder volver
         draw_zoom_buttons(dep_cam, mouse);
         draw_dep_canvas_buttons(state, dep_cam, mouse, canvas_blocked);
-        draw_vscode_button(state, mouse);
         return;
     }
 
@@ -141,7 +117,7 @@ void draw_dep_view(AppState& state, Camera2D& dep_cam, Vector2 mouse) {
             dep_sim_step(state);
     }
 
-    // ── Estado de drag para modo posición ─────────────────────────────────────
+    // ── Estado de drag para modo posición (persiste entre frames) ────────────
     static std::string s_drag_id;
     static Vector2     s_drag_start_mouse = { 0.f, 0.f };
     static Vector2     s_drag_start_world = { 0.f, 0.f };
@@ -171,7 +147,7 @@ void draw_dep_view(AppState& state, Camera2D& dep_cam, Vector2 mouse) {
         dep_cam.target = GetScreenToWorld2D(mouse, dep_cam);
         dep_cam.zoom = Clamp(dep_cam.zoom + wh * 0.12f, 0.05f, 6.f);
     }
-    dep_cam.offset = { (float)CX(), (float)CCY() };
+    dep_cam.offset = { (float)CX(), (float)CY() };
 
     // ── Fondo con grid ────────────────────────────────────────────────────────
     DrawRectangle(0, UI_TOP(), cw, ch, ColorAlpha(th.bg_app, 1.f));
@@ -188,17 +164,18 @@ void draw_dep_view(AppState& state, Camera2D& dep_cam, Vector2 mouse) {
     BeginScissorMode(0, UI_TOP(), cw, ch);
     BeginMode2D(dep_cam);
 
-    // Aristas
+    // Aristas — dirección: base (dep_id) → resultado (id), punta en resultado
     for (auto& [id, node] : use_graph.nodes()) {
-        auto ia = s_phys.find(id);
+        auto ia = s_phys.find(id);          // ia = nodo resultado
         if (ia == s_phys.end()) continue;
         for (auto& dep_id : node.depends_on) {
-            auto ib = s_phys.find(dep_id);
+            auto ib = s_phys.find(dep_id);  // ib = nodo base/dependencia
             if (ib == s_phys.end()) continue;
             Color edge_col =
                 id == s_focus_id ? ColorAlpha(th.success, 0.75f) :
                 dep_id == s_focus_id ? ColorAlpha(th.accent, 0.75f) :
                 ColorAlpha(th.ctrl_border, 0.45f);
+            // from=base(ib), to=resultado(ia) → punta apunta al resultado
             dep_draw_edge(
                 { ib->second.x, ib->second.y }, { ia->second.x, ia->second.y },
                 ib->second.w, ib->second.h,
@@ -207,7 +184,7 @@ void draw_dep_view(AppState& state, Camera2D& dep_cam, Vector2 mouse) {
         }
     }
 
-    // Nodos
+    // Nodos — dos pasadas: sombras primero (no-foco), luego foco encima
     Vector2     wm = in_canvas ? GetScreenToWorld2D(mouse, dep_cam)
         : Vector2{ -99999.f, -99999.f };
     std::string clicked_id;
@@ -215,6 +192,7 @@ void draw_dep_view(AppState& state, Camera2D& dep_cam, Vector2 mouse) {
         state.mode == ViewMode::MSC2020 ? "MSC:" :
         state.mode == ViewMode::Mathlib ? "ML:" : "STD:";
 
+    // Actualizar posición del nodo arrastrado (dentro de Mode2D para coordenadas world)
     if (state.position_mode_active && !s_drag_id.empty()) {
         if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
             Vector2 cur_wm = GetScreenToWorld2D(mouse, dep_cam);
@@ -229,6 +207,7 @@ void draw_dep_view(AppState& state, Camera2D& dep_cam, Vector2 mouse) {
             }
         }
         else {
+            // Soltar: guardar en temp_positions
             auto it = s_phys.find(s_drag_id);
             if (it != s_phys.end()) {
                 std::string key = mode_prefix + s_drag_id;
@@ -246,12 +225,13 @@ void draw_dep_view(AppState& state, Camera2D& dep_cam, Vector2 mouse) {
             NodeRole  role = dep_get_role(state, id);
             Rectangle rect = { p.x - p.w * 0.5f, p.y - p.h * 0.5f, p.w, p.h };
             bool hov = !canvas_blocked && CheckCollisionPointRec(wm, rect)
-                && s_drag_id.empty();
+                && s_drag_id.empty(); // no hover en otros nodos mientras arrastramos
 
             dep_draw_node(id, p, role, hov, th, state);
 
             if (hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                 if (state.position_mode_active) {
+                    // Iniciar drag
                     s_drag_id = id;
                     s_drag_start_mouse = GetScreenToWorld2D(mouse, dep_cam);
                     s_drag_start_world = { p.x, p.y };
@@ -266,6 +246,7 @@ void draw_dep_view(AppState& state, Camera2D& dep_cam, Vector2 mouse) {
     EndMode2D();
     EndScissorMode();
 
+    // Click procesado fuera de Mode2D
     if (!clicked_id.empty()) {
         dep_view_init(state, clicked_id);
         dep_cam.target = { 0.f, 0.f };
@@ -273,11 +254,13 @@ void draw_dep_view(AppState& state, Camera2D& dep_cam, Vector2 mouse) {
         return;
     }
 
-    // ── HUD INFO ──────────────────────────────────────────────────────────────
+    // ── HUD INFO (título + leyenda + stats) ───────────────────────────────────
+    // Barra superior semitransparente con título del foco
     DrawRectangle(0, UI_TOP(), cw, 48, ColorAlpha(th.bg_app, 0.88f));
     DrawLineEx({ 0.f, (float)(UI_TOP() + 48) }, { (float)cw, (float)(UI_TOP() + 48) },
         1.f, ColorAlpha(th.ctrl_border, 0.4f));
 
+    // Título central (desplazado a la derecha para dejar espacio a los botones)
     {
         const DepNode* fn = use_graph.get(s_focus_id);
         std::string    title = fn
@@ -285,10 +268,12 @@ void draw_dep_view(AppState& state, Camera2D& dep_cam, Vector2 mouse) {
             : dep_safe_trunc(s_focus_id, 36);
         std::string    full = s_focus_id + "  \xE2\x80\x94  " + title;
         int tw = MeasureTextF(full.c_str(), 17);
+        // Centrar entre los botones izquierda (≈170px) y la leyenda derecha (≈190px)
         int text_x = 170 + (cw - 170 - 190 - tw) / 2;
         DrawTextF(full.c_str(), text_x, UI_TOP() + 15, 17, th.ctrl_text);
     }
 
+    // Leyenda de roles (esquina superior derecha)
     {
         int lx = cw - 180, ly = UI_TOP() + 8;
         auto dot = [&](Color c, const char* label, int row) {
@@ -300,6 +285,7 @@ void draw_dep_view(AppState& state, Camera2D& dep_cam, Vector2 mouse) {
         dot(ColorAlpha(th.ctrl_border, 0.8f), "Otro", 2);
     }
 
+    // Barra de progreso de simulación (inferior izquierda)
     if (s_sim_step < SIM_MAX) {
         float pct = (float)s_sim_step / SIM_MAX;
         int bw = 120, bh = 6, bx2 = 12, by2 = g_split_y - 20;
@@ -308,6 +294,7 @@ void draw_dep_view(AppState& state, Camera2D& dep_cam, Vector2 mouse) {
         DrawTextF("simulando...", bx2, by2 - 14, 11, ColorAlpha(th.text_dim, 0.6f));
     }
 
+    // Conteo de nodos (inferior derecha)
     {
         char info[80];
         snprintf(info, sizeof(info), "%d nodos totales  |  %zu en vista",
@@ -316,6 +303,7 @@ void draw_dep_view(AppState& state, Camera2D& dep_cam, Vector2 mouse) {
         DrawTextF(info, cw - iw - 10, g_split_y - 18, 12, ColorAlpha(th.text_dim, 0.55f));
     }
 
+    // Hint de interacción (inferior centro)
     {
         const char* hint = state.position_mode_active
             ? "Modo posicion: arrastra nodos  |  Clic en 'Posicion' para salir"
@@ -324,8 +312,8 @@ void draw_dep_view(AppState& state, Camera2D& dep_cam, Vector2 mouse) {
         DrawTextF(hint, cw / 2 - hw / 2, g_split_y - 18, 11, ColorAlpha(th.text_dim, 0.4f));
     }
 
-    // ── Controles compartidos ─────────────────────────────────────────────────
+    // ── Controles compartidos (zoom + botones canvas) ─────────────────────────
+    // Exactamente igual que en bubble_view, pero llamando a draw_dep_canvas_buttons
     draw_zoom_buttons(dep_cam, mouse);
     draw_dep_canvas_buttons(state, dep_cam, mouse, canvas_blocked);
-    draw_vscode_button(state, mouse);
 }

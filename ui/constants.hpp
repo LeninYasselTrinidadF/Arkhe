@@ -25,4 +25,4 @@ inline int PANEL_W() { return 420; }
 inline int CANVAS_W() { return SW() - PANEL_W(); }
 inline int CX() { return CANVAS_W() / 2; }
 // Centro vertical del area de burbujas en coordenadas de ventana.
-inline int CY() { return UI_TOP() + TOP_H() / 2; }
+inline int CCY() { return UI_TOP() + TOP_H() / 2; } // Cambiado de CY() a CCY()

@@ -68,7 +68,7 @@ void UbicacionesPanel::draw(Vector2 mouse) {
     const int fh      = 22;
     const int spacing = 46;
 
-    // ── Sección 1: rutas de assets ────────────────────────────────────────────
+    // ── Sección 1: rutas ──────────────────────────────────────────────────────
     struct Row {
         const char* label;
         const char* title_dialog;
@@ -79,11 +79,12 @@ void UbicacionesPanel::draw(Vector2 mouse) {
     };
 
     Row rows[] = {
-        { "Raiz de Assets",  "Seleccionar carpeta de assets",   tb.assets_path,   512, 0, false },
-        { "Entradas (.tex)", "Seleccionar carpeta de entradas", tb.entries_path,  512, 1, false },
-        { "Graficos",        "Seleccionar carpeta de graficos", tb.graphics_path, 512, 2, false },
-        { "pdflatex.exe",    "Seleccionar pdflatex",           tb.latex_path,    512, 3, true  },
-        { "pdftoppm.exe",    "Seleccionar pdftoppm",           tb.pdftoppm_path, 512, 4, true  },
+        { "Raiz de Assets",  "Seleccionar carpeta de assets",   tb.assets_path,       512, 0, false },
+        { "Entradas (.tex)", "Seleccionar carpeta de entradas", tb.entries_path,      512, 1, false },
+        { "Graficos",        "Seleccionar carpeta de graficos", tb.graphics_path,     512, 2, false },
+        { "pdflatex.exe",    "Seleccionar pdflatex",           tb.latex_path,        512, 3, true  },
+        { "pdftoppm.exe",    "Seleccionar pdftoppm",           tb.pdftoppm_path,     512, 4, true  },
+        { "Mathlib src",     "Seleccionar raiz de mathlib4",   tb.mathlib_src_path,  512, 5, false },
     };
 
     int  y             = pos_y + 40;
@@ -110,7 +111,7 @@ void UbicacionesPanel::draw(Vector2 mouse) {
         y += spacing;
     }
 
-    // Botón Aplicar (assets)
+    // Botón Aplicar
     const int apply_y = y + 4;
     draw_h_line(lx, apply_y, pos_x + PW - lx);
     y = apply_y + 8;
@@ -137,25 +138,6 @@ void UbicacionesPanel::draw(Vector2 mouse) {
     DrawTextF("GENERADORES MATHLIB", lx, y, 11, { 100, 180, 255, 220 });
     y += 18;
 
-    // Campo: Mathlib src
-    DrawTextF("Mathlib src", lx, y + (fh - 11) / 2, 11, { 140, 150, 185, 230 });
-    {
-        int fx = lx + label_w;
-        draw_text_field(tb.mathlib_src_path, 512,
-            fx, y, field_w, fh, 11,
-            tb.active_field, 5, mouse);
-
-        Rectangle br = { (float)(fx + field_w + 6), (float)y, (float)btn_w, (float)fh };
-        bool bhov = CheckCollisionPointRec(mouse, br);
-        DrawRectangleRec(br, bhov ? Color{ 60, 80, 150, 255 } : Color{ 30, 35, 60, 255 });
-        DrawRectangleLinesEx(br, 1.f, bhov ? Color{ 100, 140, 255, 220 } : Color{ 50, 60, 110, 200 });
-        DrawTextF("...", (int)br.x + 8, (int)br.y + (fh - 10) / 2, 10, { 160, 170, 210, 220 });
-        if (bhov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
-            browse_folder(tb.mathlib_src_path, 512, "Seleccionar raiz de mathlib4");
-    }
-    y += spacing;
-
-    // Sub-label info
     DrawTextF("Genera mathlib_layout.json y deps_mathlib.json en Raiz de Assets.",
         lx, y, 9, { 80, 100, 140, 180 });
     y += 14;
@@ -179,7 +161,6 @@ void UbicacionesPanel::draw(Vector2 mouse) {
         opts.mathlib_path = tb.mathlib_src_path;
         opts.assets_path  = tb.assets_path;
 
-        // Lanzar en hilo separado para no bloquear la UI
         state.mathlib_layout_job.running = true;
         state.mathlib_layout_job.done    = false;
         state.mathlib_layout_job.status  = "Iniciando...";
@@ -233,7 +214,6 @@ void UbicacionesPanel::draw(Vector2 mouse) {
                        { 50, 100, 50, 255 }, { 70, 150, 70, 255 }, {}))
         {
             tb.assets_changed = true;
-            // Resetear jobs para no mostrar el botón de nuevo
             state.mathlib_layout_job.done    = false;
             state.mathlib_layout_job.status.clear();
             state.mathlib_deps_job.done      = false;

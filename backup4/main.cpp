@@ -4,8 +4,6 @@
 #include "data/crossref_loader.hpp"
 #include "data/nav_state.hpp"
 #include "data/position_state.hpp"
-#include "data/terminal_input.hpp"
-#include "data/vscode_bridge.hpp"
 
 // UI Core
 #include "ui/core/font_manager.hpp"
@@ -24,12 +22,12 @@
 #include "ui/bubble/bubble_stats.hpp"
 #include "ui/bubble_view.hpp"
 #include "ui/dep_view.hpp"
-#include "ui/constants.hpp"
-#include "ui/core/overlay.hpp"
+#include "ui/constants.hpp" // Asumiendo que está en core
+#include "ui/core/overlay.hpp"   // Asumiendo que está en core
 
 #include "raylib.h"
 #include "raymath.h"
-#include <fstream>
+#include <fstream>  // <--- Esta es la pieza que falta
 #include <cstring>
 
 int g_split_y = TOOLBAR_H + 640;
@@ -62,10 +60,14 @@ static void reload_all_assets(AppState& state,
     bubble_stats_clear();
     state.nav_stack.clear(); state.cam_memory.clear();
     if (root_msc) state.push(root_msc);
+    // Recargar grafo de dependencias por modo (si existen archivos específicos, se usan)
     state.dep_graph_msc.load(asset_path(state, "deps.json"));
     state.dep_graph_mathlib.load(asset_path(state, "deps_mathlib.json"));
     state.dep_graph_standard.load(asset_path(state, "deps_standard.json"));
+
+    // Cargar posiciones temporales guardadas
     position_state_load(state);
+    // Actualizar alias compat
     state.dep_graph = get_dep_graph_for(state);
     state.dep_view_active = false;
 }
@@ -76,11 +78,6 @@ int main() {
     SetTargetFPS(60);
     apply_theme(0);
     g_circle_mask.load();
-
-    // Terminal no-bloqueante
-    terminal_input_init();
-    printf("Arkhe — terminal activa. Escribe 'help' para comandos.\n");
-    terminal_print_prompt();
 
     // Fuente custom — fallback silencioso si no existe el .ttf
     g_fonts.load("assets/fonts/main.ttf");
@@ -103,10 +100,14 @@ int main() {
     state.textures.preload_all();
     g_skin.load(ensure_slash(state.toolbar.graphics_path), state.textures);
     if (root_msc) state.push(root_msc);
+    // Cargar grafo de dependencias por modo
     state.dep_graph_msc.load(asset_path(state, "deps.json"));
     state.dep_graph_mathlib.load(asset_path(state, "deps_mathlib.json"));
     state.dep_graph_standard.load(asset_path(state, "deps_standard.json"));
+
+    // Cargar posiciones temporales guardadas
     position_state_load(state);
+    // Compat: mantener el grafo "legacy" apuntando al actual
     state.dep_graph = get_dep_graph_for(state);
 
     auto current_root = [&]()->std::shared_ptr<MathNode> {
@@ -124,15 +125,6 @@ int main() {
 
     while (!WindowShouldClose()) {
         Vector2 mouse = GetMousePosition();
-
-        // ── Terminal + Bridge (polling pasivo, costo ≈0) ──────────────────────
-        terminal_input_poll(state);
-        {
-            BridgeState bs;
-            if (bridge_poll(bs))
-                bridge_navigate(state, bs);
-        }
-
         overlay::clear();
 
         if (state.toolbar.theme_id != prev_theme) {
@@ -142,6 +134,8 @@ int main() {
         if (state.toolbar.assets_changed) {
             state.toolbar.assets_changed = false;
             reload_all_assets(state, root_msc, root_mathlib, root_std);
+            // Al recargar assets el árbol cambia → borrar estado guardado
+            // para no intentar restaurar nodos que ya no existen
             { std::ofstream f(NAV_STATE_FILE); if (f.is_open()) f << "{}"; }
             prev_mode = state.mode; prev_depth = (int)state.nav_stack.size();
         }
@@ -171,19 +165,24 @@ int main() {
         }
 
         if (state.mode != prev_mode) {
+            // Guardar posición del modo que se abandona
             nav_state_save(state, prev_mode);
             MathNode* old = state.current();
             state.save_cam(cam, state.cam_key_for(prev_mode, old ? old->code : "ROOT"));
+            // Preparar el nuevo modo
             state.nav_stack.clear();
-            auto root = current_root(); if (root) state.push(root);
+            auto root = current_root(); if (root)state.push(root);
+            // Restaurar posición guardada del nuevo modo (si existe)
             nav_state_load(state, state.mode, current_root());
             state.restore_cam(cam); prev_mode = state.mode;
+            // actualizar alias compat al cambiar modo
             state.dep_graph = get_dep_graph_for(state);
         }
         int cur_depth = (int)state.nav_stack.size();
         if (cur_depth != prev_depth) { state.restore_cam(cam); prev_depth = cur_depth; }
         if (IsKeyPressed(KEY_ESCAPE)) {
             if (state.dep_view_active) {
+                // ESC en vista de dependencias → volver al modo burbuja anterior
                 state.dep_view_active = false;
             }
             else {
@@ -203,7 +202,7 @@ int main() {
             draw_bubble_view(state, cam, mouse);
         }
         if (!state.dep_view_active)
-            draw_mode_switcher(state, mouse);
+            draw_mode_switcher(state, mouse);   // solo en bubble_view
         DrawLineEx({ (float)CANVAS_W(),(float)UI_TOP() }, { (float)CANVAS_W(),(float)g_split_y }, 1.f, th.split_vline);
         draw_search_panel(state, current_root().get(), mouse);
         draw_info_panel(state, mouse);
@@ -215,7 +214,7 @@ int main() {
         DrawRectangle(hx - 20, g_split_y - 3, 40, 6, sc);
         for (int d : {-10, 0, 10}) DrawRectangle(hx + d - 2, g_split_y - 1, 4, 2, th_alpha(th.split_dots));
 
-        draw_toolbar(state, mouse);
+        draw_toolbar(state, mouse);   // siempre al final → encima de todo
 
         DrawFPS(10, SH() - 20);
         EndDrawing();

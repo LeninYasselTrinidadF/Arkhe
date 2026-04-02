@@ -34,7 +34,7 @@ struct ToolbarState {
     char graphics_path[512] = "assets/graphics/";
     char latex_path[512]    = "C:/texlive/2025/bin/windows/pdflatex.exe";
     char pdftoppm_path[512] = "C:/texlive/2025/bin/windows/pdftoppm.exe";
-    char mathlib_src_path[512] = "";   // ruta al repo mathlib4 (para generadores)
+    char mathlib_src_path[512] = "C:/Users/USUARIO/Documents/mathlib_clone";   // ruta al repo mathlib4 (para generadores)
 
     // Flags de activacion
     bool assets_changed = false;

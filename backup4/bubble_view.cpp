@@ -9,7 +9,6 @@
 #include "constants.hpp"
 #include "raylib.h"
 #include "raymath.h"
-#include "../data/vscode_bridge.hpp"
 #include <algorithm>
 #include <cmath>
 #include <sstream>
@@ -32,29 +31,6 @@ static const char* mode_name(ViewMode m) {
     case ViewMode::Standard: return "Estandar";
     }
     return "";
-}
-
-// ── Botón "→ VS" — esquina inferior izquierda del canvas ─────────────────────
-static void draw_vscode_button(AppState& state, Vector2 mouse) {
-    const Theme& th = g_theme;
-    const int bw = 54, bh = 22;
-    const int bx = 10;
-    const int by = g_split_y - bh - 10;
-
-    Rectangle r = { (float)bx, (float)by, (float)bw, (float)bh };
-    bool hov = CheckCollisionPointRec(mouse, r);
-
-    DrawRectangleRec(r, hov ? th.bg_button_hover : th_alpha(th.bg_button));
-    DrawRectangleLinesEx(r, 1.f, th_alpha(th.ctrl_border));
-
-    const char* lbl = "\xE2\x86\x92 VS";   // → VS  (UTF-8)
-    int tw = MeasureTextF(lbl, 11);
-    DrawTextF(lbl, bx + (bw - tw) / 2, by + (bh - 11) / 2, 11, th.ctrl_text);
-
-    if (hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-        bridge_launch_vscode(state);
-        TraceLog(LOG_INFO, "bubble_view: VS Code lanzado desde botón");
-    }
 }
 
 // ── draw_bubble_view ──────────────────────────────────────────────────────────
@@ -82,7 +58,7 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
     constexpr float CENTER_R = 178.0f;
     constexpr float CHILD_R_MIN = 38.0f;
     constexpr float CHILD_R_MAX = 80.0f;
-    constexpr int   LBL_FONT = 15;
+    constexpr int   LBL_FONT = 15;   // debe coincidir con el valor en el bloque de dibujo
 
     int max_weight = 1;
     if (cur)
@@ -97,12 +73,14 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
                 bubble_stats_get(child->code).weight,
                 max_weight, CHILD_R_MIN, CHILD_R_MAX);
 
-            auto words = split_words_count(child->label);
+            // Expandir radio si el label lo necesita
+            auto words = split_words_count(child->label);   // helper inline abajo
             float max_r = base_r;
             if (words == 1)
-                max_r = base_r * 3.0f;
+                max_r = base_r * 3.0f;   // 1 palabra: hasta 3× para que entre
             else if (words <= 3)
-                max_r = base_r * 2.0f;
+                max_r = base_r * 2.0f;   // 2-3 palabras: hasta 2× (duplicar)
+            // 4+ palabras: no expandir radio, se usa "..." o abreviatura
 
             float final_r = (words <= 3)
                 ? fit_radius_for_label(child->label, base_r, max_r, LBL_FONT)
@@ -130,6 +108,7 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
             }
     }
 
+    // Si estamos en modo posicionamiento, bloquear selección y permitir arrastre
     bool positioning = state.position_mode_active && in_canvas && !canvas_blocked;
     static int drag_idx = -1;
     static Vector2 drag_start_mouse = { 0,0 };
@@ -150,7 +129,7 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
         cam.target = GetScreenToWorld2D(mouse, cam);
         cam.zoom = Clamp(cam.zoom + wheel * 0.1f, 0.05f, 5.0f);
     }
-    cam.offset = { (float)CX(), (float)CCY() };
+    cam.offset = { (float)CX(), (float)CY() };
 
     // ── Dibujo ────────────────────────────────────────────────────────────────
     BeginScissorMode(0, UI_TOP(), CANVAS_W(), TOP_H());
@@ -202,6 +181,7 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
     if (cur && !cur->children.empty()) {
         Vector2 wm = GetScreenToWorld2D(mouse, cam);
 
+        // ── Construir mapa de abreviaturas (resuelve colisiones una vez) ──────
         std::vector<std::string> all_labels;
         all_labels.reserve(cur->children.size());
         for (auto& child : cur->children)
@@ -213,7 +193,9 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
             const BubbleStats& cs = bubble_stats_get(child->code);
             float bx = layout[i].x, by = layout[i].y, draw_r = layout[i].r;
 
+            // Override with temp positions if present
             std::string keypref = state.cam_key_for(state.mode, child->code);
+            // keypref like "MSC:CODE"; temp_positions uses same format
             auto tp_it = state.temp_positions.find(keypref);
             if (tp_it != state.temp_positions.end()) {
                 bx = tp_it->second.x; by = tp_it->second.y;
@@ -225,19 +207,24 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
             bool hov = (ddx * ddx + ddy * ddy) < (draw_r * draw_r)
                 && in_canvas && !canvas_blocked;
 
+            // Glow
             DrawCircleV({ bx, by }, draw_r + 3.0f,
                 th_fade(child->color,
                     th.bubble_glow_alpha * (cs.connected ? 1.0f : 0.3f)));
 
+            // Burbuja
             draw_bubble(state, bx, by, draw_r, col, child->texture_key);
 
+            // Arco de progreso
             if (!child->children.empty() && cs.progress > 0.001f)
                 draw_progress_arc(bx, by, draw_r, cs.progress, 3.5f,
                     arc_color(state.mode, cs.progress));
 
+            // Hover ring + click
             if (hov) {
                 DrawCircleLinesV({ bx, by }, draw_r + 6.0f, th.bubble_hover_ring);
                 if (positioning) {
+                    // start dragging on press
                     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                         drag_idx = i;
                         drag_start_mouse = GetMousePosition();
@@ -253,12 +240,15 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
                 }
             }
 
+            // ── Label multilínea ─────────────────────────────────────────────
             bool has_tex = !child->texture_key.empty();
 
+            // Calcular líneas a dibujar
             BubbleLabelLines lbl_result = make_label_lines(child->label, draw_r, LBL_FONT);
 
             std::vector<std::string> draw_lines;
             if (lbl_result.needs_abbrev) {
+                // Usar abreviatura resuelta (sin colisiones)
                 auto it = abbrev_map.find(child->label);
                 std::string abbr = (it != abbrev_map.end()) ? it->second : child->label.substr(0, 4);
                 draw_lines.push_back(abbr);
@@ -267,11 +257,13 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
                 draw_lines = lbl_result.lines;
             }
 
+            // Altura total del bloque de texto
             int line_h = MeasureTextF("Ag", LBL_FONT);
             int line_gap = 2;
             int total_h = (int)draw_lines.size() * line_h +
                 ((int)draw_lines.size() - 1) * line_gap;
 
+            // Posición Y base: si hay textura, debajo del centro; si no, centrado
             int base_y;
             if (has_tex)
                 base_y = (int)(by + draw_r * 0.55f);
@@ -286,6 +278,7 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
                     th.bubble_label_child);
             }
 
+            // Indicador "desconectado"
             if (!cs.connected && !child->children.empty()) {
                 int iw = MeasureTextF("?", 14);
                 DrawTextF("?", (int)(bx - iw * 0.5f), (int)(by - draw_r - 18),
@@ -303,7 +296,7 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
     EndMode2D();
     EndScissorMode();
 
-    // Handle dragging outside Mode2D
+    // Handle dragging outside Mode2D (to read raw mouse)
     if (positioning) {
         if (drag_idx >= 0) {
             if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
@@ -312,18 +305,19 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
                                   (cur_mouse.y - drag_start_mouse.y) / cam.zoom };
                 float nbx = drag_start_pos.x + delta.x;
                 float nby = drag_start_pos.y + delta.y;
+                // write back to temp_positions using key format
                 auto child = cur->children[drag_idx];
                 std::string key = state.cam_key_for(state.mode, child->code);
                 state.temp_positions[key] = { nbx, nby };
             }
             else {
+                // released
                 drag_idx = -1;
             }
         }
     }
 
-    // ── Controles HUD ─────────────────────────────────────────────────────────
+    // ── Controles HUD (fuera de Mode2D) ──────────────────────────────────────
     draw_zoom_buttons(cam, mouse);
     draw_canvas_buttons(state, mouse, canvas_blocked);
-    draw_vscode_button(state, mouse);
 }
