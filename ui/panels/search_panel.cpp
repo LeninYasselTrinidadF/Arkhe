@@ -1,6 +1,7 @@
 #include "search_panel.hpp"
 #include "../core/font_manager.hpp"
 #include "../core/overlay.hpp"
+#include "../key_controls/keyboard_nav.hpp"
 #include "../search/loogle.hpp"
 #include "../core/nine_patch.hpp"
 #include "../core/skin.hpp"
@@ -104,6 +105,7 @@ static float draw_scrollbar(int sx, int area_top, int area_h,
         dragging = true;
         drag_start_y = mouse.y;
         drag_start_off = offset;
+
     }
 
     // Aplicar drag (funciona aunque el mouse salga del área)
@@ -188,7 +190,11 @@ void draw_search_panel(AppState& state, const MathNode* search_root, Vector2 mou
     if (g_skin.panel.valid()) g_skin.panel.draw((float)CANVAS_W(), (float)panel_top, (float)PANEL_W(), (float)TOP_H(), th.bg_panel);
     else DrawRectangle(CANVAS_W(), panel_top, PANEL_W(), TOP_H(), th.bg_panel);
 
-    bool panel_active = mouse.x > CANVAS_W() && !overlay::blocks_mouse(mouse);
+    // panel_hover: true when mouse is over the panel and not blocked by overlays.
+    bool panel_hover = mouse.x > CANVAS_W() && !overlay::blocks_mouse(mouse);
+    // panel_active: the panel accepts input either when hovered by mouse or when
+    // keyboard navigation has the Search zone active (Tab or clicked to activate).
+    bool panel_active = panel_hover || g_kbnav.in(FocusZone::Search);
 
     // ── Cabecera ──────────────────────────────────────────────────────────────
     int y = panel_top;
@@ -211,42 +217,49 @@ void draw_search_panel(AppState& state, const MathNode* search_root, Vector2 mou
         local_btn_w, field_h, local_btn_hov);
     y += field_h + item_gap;
 
+    // El campo puede recibir entrada por mouse (panel_active) o por navegación
+    // por teclado cuando g_kbnav está en la zona Search.
+    static bool local_focus = true;
+    Rectangle lf_local = { (float)px, (float)field_y, (float)(pw - local_btn_w - 4), (float)field_h };
     if (panel_active) {
-        static bool local_focus = true;
-        Rectangle lf = { (float)px, (float)field_y, (float)(pw - local_btn_w - 4), (float)field_h };
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
-            local_focus = CheckCollisionPointRec(mouse, lf);
-        if (local_focus) {
-            int prev = (int)strlen(state.search_buf);
-            int key = GetCharPressed();
-            while (key > 0) {
-                int len = (int)strlen(state.search_buf);
-                if (key >= 32 && key <= 125 && len < 255) {
-                    state.search_buf[len] = (char)key; state.search_buf[len + 1] = '\0';
-                }
-                key = GetCharPressed();
+            local_focus = CheckCollisionPointRec(mouse, lf_local);
+    }
+    // Si el sistema de navegación por teclado está activo en Search, forzamos
+    // el foco según g_kbnav.search_idx (0 = local, 1 = loogle).
+    if (g_kbnav.in(FocusZone::Search)) {
+        local_focus = (g_kbnav.search_idx == 0);
+    }
+    if (local_focus) {
+        int prev = (int)strlen(state.search_buf);
+        int key = GetCharPressed();
+        while (key > 0) {
+            int len = (int)strlen(state.search_buf);
+            if (key >= 32 && key <= 125 && len < 255) {
+                state.search_buf[len] = (char)key; state.search_buf[len + 1] = '\0';
             }
-            if (IsKeyPressed(KEY_BACKSPACE)) {
-                int len = (int)strlen(state.search_buf);
-                if (len > 0) state.search_buf[len - 1] = '\0';
-            }
-            if ((int)strlen(state.search_buf) != prev) {
-                s_local_scroll = 0.f;
-                s_local_page = 0;
-                s_local_full_loaded = false;
-                s_local_full_hits.clear();
-                s_local_page_hits.clear();
-            }
+            key = GetCharPressed();
         }
-        // Botón Buscar local: fuerza carga completa de resultados
-        if (local_btn_hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)
-            && strlen(state.search_buf) > 0 && search_root)
-        {
-            s_local_full_hits = fuzzy_search(search_root, state.search_buf, LOCAL_FULL_MAX);
-            s_local_full_loaded = true;
-            s_local_page = 0;
+        if (IsKeyPressed(KEY_BACKSPACE)) {
+            int len = (int)strlen(state.search_buf);
+            if (len > 0) state.search_buf[len - 1] = '\0';
+        }
+        if ((int)strlen(state.search_buf) != prev) {
             s_local_scroll = 0.f;
+            s_local_page = 0;
+            s_local_full_loaded = false;
+            s_local_full_hits.clear();
+            s_local_page_hits.clear();
         }
+    }
+    // Botón Buscar local: fuerza carga completa de resultados
+    if (local_btn_hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)
+        && strlen(state.search_buf) > 0 && search_root)
+    {
+        s_local_full_hits = fuzzy_search(search_root, state.search_buf, LOCAL_FULL_MAX);
+        s_local_full_loaded = true;
+        s_local_page = 0;
+        s_local_scroll = 0.f;
     }
 
     // ── Lista local ───────────────────────────────────────────────────────────
@@ -356,12 +369,17 @@ void draw_search_panel(AppState& state, const MathNode* search_root, Vector2 mou
     bool btn_hov = panel_active && CheckCollisionPointRec(mouse, btn);
     draw_search_button("Buscar", (int)btn.x, (int)btn.y, btn_w, field_h, btn_hov);
 
+    // Campo Loogle: igual que el local, puede activarse por mouse o por kbnav.
+    static bool loogle_focus = false;
+    Rectangle lf_loogle = { (float)px, (float)lfld_y, (float)(pw - btn_w - 4), (float)field_h };
     if (panel_active) {
-        static bool loogle_focus = false;
-        Rectangle lf = { (float)px, (float)lfld_y, (float)(pw - btn_w - 4), (float)field_h };
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
-            loogle_focus = CheckCollisionPointRec(mouse, lf);
-        if (loogle_focus) {
+            loogle_focus = CheckCollisionPointRec(mouse, lf_loogle);
+    }
+    if (g_kbnav.in(FocusZone::Search)) {
+        loogle_focus = (g_kbnav.search_idx == 1);
+    }
+    if (loogle_focus) {
             int prev = (int)strlen(state.loogle_buf);
             int key = GetCharPressed();
             while (key > 0) {
@@ -385,7 +403,6 @@ void draw_search_panel(AppState& state, const MathNode* search_root, Vector2 mou
             loogle_search_async(state, state.loogle_buf);
             s_loogle_page = 0; s_loogle_scroll = 0.f;
         }
-    }
     ly += field_h + item_gap;
 
     if (state.loogle_loading.load()) {
