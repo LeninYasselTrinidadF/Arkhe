@@ -4,37 +4,32 @@
 #include "raylib.h"
 
 // ── FocusZone ─────────────────────────────────────────────────────────────────
-// Zonas de foco para navegación por teclado (Tab las cicla).
 enum class FocusZone { Canvas, Toolbar, Search, Info };
 
 // ── KbNavState ────────────────────────────────────────────────────────────────
 struct KbNavState {
-    bool       active     = false;           // activado en primer Tab / flecha
-    FocusZone  zone       = FocusZone::Canvas;
+    bool       active = false;
+    FocusZone  zone = FocusZone::Canvas;
 
-    // ── Canvas ────────────────────────────────────────────────────────────────
-    // Bubble view: 0 = burbuja central, 1..N = hijo i-ésimo
-    int         canvas_idx  = 0;
-    // Dep view: ID del nodo seleccionado
+    // Canvas
+    int         canvas_idx = 0;
     std::string dep_sel_id;
 
-    // ── Toolbar ───────────────────────────────────────────────────────────────
-    // 0..3 = tabs (Ubicaciones/Docs/Editor/Config), 4 = botón tema
-    int  toolbar_idx  = 0;
+    // Toolbar: 0..3 = tabs, 4 = botón tema
+    int  toolbar_idx = 0;
 
-    // ── Search ────────────────────────────────────────────────────────────────
-    // 0 = búsqueda local / fuzzy, 1 = loogle
-    int  search_idx   = 0;
+    // Search: 0 = local/fuzzy, 1 = loogle
+    int  search_idx = 0;
 
-    // ── Info ──────────────────────────────────────────────────────────────────
-    int  info_idx     = 0;
+    // Info
+    int  info_idx = 0;
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
     bool in(FocusZone z) const { return active && zone == z; }
 
     void activate(FocusZone z = FocusZone::Canvas) {
         active = true; zone = z;
     }
+    // Nunca desactiva; solo cambia de zona
     void deactivate() { active = false; }
 
     void goto_zone(FocusZone z) {
@@ -49,10 +44,18 @@ extern KbNavState g_kbnav;
 // ── API ───────────────────────────────────────────────────────────────────────
 
 // Llamar una vez por frame ANTES de los draw_* (en el bucle principal).
-// Gestiona: Tab, +/−, P, M, N, S, E, F, y desactivación por ratón.
-// Devuelve true si alguna tecla fue consumida.
 bool kbnav_handle_global(AppState& state, Camera2D& cam, Camera2D& dep_cam);
 
-// Dibuja un pequeño indicador "[KB] Zona" en la esquina del canvas.
-// Llamar al final del frame (encima de todo lo demás).
+// ── Indicador inline en toolbar ───────────────────────────────────────────────
+
+// Llamar desde toolbar.cpp después de posicionar el botón de tema.
+// Devuelve el ancho que necesita el indicador (0 si no está activo).
+int  kbnav_query_indicator_width();
+
+// toolbar.cpp informa la X donde debe dibujarse el indicador.
+void kbnav_set_indicator_x(int x);
+
+// Dibujar el indicador; llamar desde main.cpp al final del frame (sobre todo).
+// El indicador aparece en el toolbar, a la derecha del botón de tema.
+// Sin parpadeo: el borde es sólido mientras haya zona activa.
 void kbnav_draw_indicator();

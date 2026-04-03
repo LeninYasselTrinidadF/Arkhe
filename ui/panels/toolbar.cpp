@@ -161,7 +161,17 @@ bool draw_toolbar(AppState& state, Vector2 mouse) {
     if (draw_theme_button(x, 0, TOOLBAR_H, kb_theme, mouse))
         state.toolbar.theme_id = (state.toolbar.theme_id + 1) % THEME_COUNT;
     x += MeasureTextF(th.name, 11) + 32;
-    draw_separator(x);
+    draw_separator(x); x += 10;
+
+    // Indicador de zona KB: reservar espacio e informar posición
+    {
+        int ind_w = kbnav_query_indicator_width();
+        if (ind_w > 0) {
+            kbnav_set_indicator_x(x);
+            x += ind_w + 8;
+            draw_separator(x);
+        }
+    }
 
     // Ruta de assets (derecha)
     std::string info = state.toolbar.assets_path;

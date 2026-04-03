@@ -5,7 +5,6 @@
 #include "../core/nine_patch.hpp"
 #include "../core/skin.hpp"
 #include "../core/theme.hpp"
-#include "../key_controls/kbnav_search.hpp"
 #include "raylib.h"
 #include <cstring>
 #include <algorithm>
@@ -176,9 +175,6 @@ void draw_search_panel(AppState& state, const MathNode* search_root, Vector2 mou
     const int SB_X = CANVAS_W() + PANEL_W() - SB_W - 3;
     int px = CANVAS_W() + 10, pw = PANEL_W() - SB_W - 16;
 
-    // Procesar teclado zona Search (escribe en buffers, lanza loogle si Enter)
-    kbnav_search_handle(state, search_root);
-
     const int LBL_SZ = 11;
     const int HDR_SZ = 13;
     const int FIELD_SZ = 13;
@@ -204,22 +200,23 @@ void draw_search_panel(AppState& state, const MathNode* search_root, Vector2 mou
     // ── Campo local ───────────────────────────────────────────────────────────
     DrawTextF("Local (fuzzy)", px, y, LBL_SZ, th_alpha(th.text_dim));
     y += g_fonts.scale(LBL_SZ) + lbl_gap;
-    int field_y_local = y;   // ← NEW: coordenada Y para indicador KB
     int field_y = y;
-    draw_search_field(px, y, pw, field_h, state.search_buf);
+    // El campo ocupa pw menos el botón Buscar (simétrico a la sección Loogle)
+    int local_btn_w = MeasureTextF("Buscar", 12) + g_fonts.scale(20);
+    draw_search_field(px, y, pw - local_btn_w - 4, field_h, state.search_buf);
+    Rectangle local_btn = { (float)(px + pw - local_btn_w), (float)y,
+                            (float)local_btn_w, (float)field_h };
+    bool local_btn_hov = panel_active && CheckCollisionPointRec(mouse, local_btn);
+    draw_search_button("Buscar", (int)local_btn.x, (int)local_btn.y,
+        local_btn_w, field_h, local_btn_hov);
     y += field_h + item_gap;
 
     if (panel_active) {
         static bool local_focus = true;
-        // Cuando kbnav controla la zona, kbnav_search_handle ya escribió
-        // en los buffers → cedemos el foco interno para no duplicar entrada
-        if (g_kbnav.in(FocusZone::Search)) { local_focus = false; }
-        else {
-            Rectangle lf = { (float)px, (float)field_y, (float)pw, (float)field_h };
-            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
-                local_focus = CheckCollisionPointRec(mouse, lf);
-        }
-        if (local_focus && !g_kbnav.in(FocusZone::Search)) {
+        Rectangle lf = { (float)px, (float)field_y, (float)(pw - local_btn_w - 4), (float)field_h };
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+            local_focus = CheckCollisionPointRec(mouse, lf);
+        if (local_focus) {
             int prev = (int)strlen(state.search_buf);
             int key = GetCharPressed();
             while (key > 0) {
@@ -240,6 +237,15 @@ void draw_search_panel(AppState& state, const MathNode* search_root, Vector2 mou
                 s_local_full_hits.clear();
                 s_local_page_hits.clear();
             }
+        }
+        // Botón Buscar local: fuerza carga completa de resultados
+        if (local_btn_hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)
+            && strlen(state.search_buf) > 0 && search_root)
+        {
+            s_local_full_hits = fuzzy_search(search_root, state.search_buf, LOCAL_FULL_MAX);
+            s_local_full_loaded = true;
+            s_local_page = 0;
+            s_local_scroll = 0.f;
         }
     }
 
@@ -345,22 +351,17 @@ void draw_search_panel(AppState& state, const MathNode* search_root, Vector2 mou
 
     int btn_w = MeasureTextF("Buscar", 12) + g_fonts.scale(20);
     int lfld_y = ly;
-    int field_y_loogle = ly;          // ← NEW
-    int loogle_btn_x   = px + pw - btn_w; // ← NEW
     draw_search_field(px, ly, pw - btn_w - 4, field_h, state.loogle_buf);
-    Rectangle btn = { (float)loogle_btn_x, (float)ly, (float)btn_w, (float)field_h };
+    Rectangle btn = { (float)(px + pw - btn_w), (float)ly, (float)btn_w, (float)field_h };
     bool btn_hov = panel_active && CheckCollisionPointRec(mouse, btn);
     draw_search_button("Buscar", (int)btn.x, (int)btn.y, btn_w, field_h, btn_hov);
 
     if (panel_active) {
         static bool loogle_focus = false;
-        if (g_kbnav.in(FocusZone::Search)) { loogle_focus = false; }
-        else {
-            Rectangle lf = { (float)px, (float)lfld_y, (float)(pw - btn_w - 4), (float)field_h };
-            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
-                loogle_focus = CheckCollisionPointRec(mouse, lf);
-        }
-        if (loogle_focus && !g_kbnav.in(FocusZone::Search)) {
+        Rectangle lf = { (float)px, (float)lfld_y, (float)(pw - btn_w - 4), (float)field_h };
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+            loogle_focus = CheckCollisionPointRec(mouse, lf);
+        if (loogle_focus) {
             int prev = (int)strlen(state.loogle_buf);
             int key = GetCharPressed();
             while (key > 0) {
@@ -379,13 +380,6 @@ void draw_search_panel(AppState& state, const MathNode* search_root, Vector2 mou
                 loogle_search_async(state, state.loogle_buf);
                 s_loogle_page = 0; s_loogle_scroll = 0.f;
             }
-
-    // Indicador KB (dibujarlo al final, después de todo)
-    kbnav_search_draw(px, pw,
-                      field_y_local,
-                      field_y_loogle,
-                      field_h,
-                      loogle_btn_x, btn_w);
         }
         if (btn_hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && strlen(state.loogle_buf) > 0) {
             loogle_search_async(state, state.loogle_buf);
