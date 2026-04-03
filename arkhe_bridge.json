@@ -1,8 +1,8 @@
 {
   "direction": "vscode",
   "mode": "Mathlib",
-  "node_code": "Mathlib.Order.CompactlyGenerated.Intervals",
-  "node_label": "Intervals",
-  "tex_file": "Mathlib_Order_CompactlyGenerated_Intervals.tex",
-  "timestamp": 1775175629
+  "node_code": "Mathlib.LinearAlgebra.AnnihilatingPolynomial",
+  "node_label": "AnnihilatingPolynomial",
+  "tex_file": "Mathlib_LinearAlgebra_AnnihilatingPolynomial.tex",
+  "timestamp": 1775177405
 }

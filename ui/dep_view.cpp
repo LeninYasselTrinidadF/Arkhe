@@ -17,29 +17,6 @@
 #include <cstdio>
 #include <cmath>
 
-// ── Botón "→ VS" — reutilizado también en dep_view ───────────────────────────
-static void draw_vscode_button(AppState& state, Vector2 mouse) {
-    const Theme& th = g_theme;
-    const int bw = 54, bh = 22;
-    const int bx = 10;
-    const int by = g_split_y - bh - 10;
-
-    Rectangle r = { (float)bx, (float)by, (float)bw, (float)bh };
-    bool hov = CheckCollisionPointRec(mouse, r);
-
-    DrawRectangleRec(r, hov ? th.bg_button_hover : th_alpha(th.bg_button));
-    DrawRectangleLinesEx(r, 1.f, th_alpha(th.ctrl_border));
-
-    const char* lbl = "\xE2\x86\x92 VS";   // → VS  (UTF-8)
-    int tw = MeasureTextF(lbl, 11);
-    DrawTextF(lbl, bx + (bw - tw) / 2, by + (bh - 11) / 2, 11, th.ctrl_text);
-
-    if (hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-        bridge_launch_vscode(state);
-        TraceLog(LOG_INFO, "dep_view: VS Code lanzado desde botón");
-    }
-}
-
 // ── dep_view_init ─────────────────────────────────────────────────────────────
 
 void dep_view_init(AppState& state, const std::string& focus_id) {
@@ -129,6 +106,7 @@ void draw_dep_view(AppState& state, Camera2D& dep_cam, Vector2 mouse) {
         draw_zoom_buttons(dep_cam, mouse);
         draw_dep_canvas_buttons(state, dep_cam, mouse, canvas_blocked);
         draw_vscode_button(state, mouse);
+        draw_mathlib_button(state, mouse);
         return;
     }
 
@@ -268,6 +246,12 @@ void draw_dep_view(AppState& state, Camera2D& dep_cam, Vector2 mouse) {
 
     if (!clicked_id.empty()) {
         dep_view_init(state, clicked_id);
+        // Mantener selected_code en sincronía para que Burbujas refleje el mismo nodo
+        const DepNode* dn = use_graph.get(clicked_id);
+        if (dn) {
+            state.selected_code = dn->id;
+            state.selected_label = dn->label;
+        }
         dep_cam.target = { 0.f, 0.f };
         dep_cam.zoom = 1.f;
         return;
@@ -328,4 +312,5 @@ void draw_dep_view(AppState& state, Camera2D& dep_cam, Vector2 mouse) {
     draw_zoom_buttons(dep_cam, mouse);
     draw_dep_canvas_buttons(state, dep_cam, mouse, canvas_blocked);
     draw_vscode_button(state, mouse);
+    draw_mathlib_button(state, mouse);
 }
