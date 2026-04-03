@@ -24,6 +24,24 @@ static int split_words_count(const std::string& s) {
     return n;
 }
 
+// Inserta espacios en transiciones minúscula→Mayúscula y dígito→Mayúscula.
+// Solo para display: no modifica datos del nodo.
+// Ejemplos: "LinearAlgebra" → "Linear Algebra"
+//           "CompactlyGenerated" → "Compactly Generated"
+//           "smul_mk" → "smul_mk"   (sin cambio)
+static std::string split_camel(const std::string& s) {
+    std::string out;
+    out.reserve(s.size() + 4);
+    for (int i = 0; i < (int)s.size(); ++i) {
+        if (i > 0 && std::isupper((unsigned char)s[i])
+            && (std::islower((unsigned char)s[i - 1])
+                || std::isdigit((unsigned char)s[i - 1])))
+            out += ' ';
+        out += s[i];
+    }
+    return out;
+}
+
 // ── Nombre del modo (solo necesario aquí para el label central) ───────────────
 static const char* mode_name(ViewMode m) {
     switch (m) {
@@ -226,7 +244,8 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
         std::vector<std::string> all_labels;
         all_labels.reserve(cur->children.size());
         for (auto& child : cur->children)
-            all_labels.push_back(child->label);
+            all_labels.push_back(state.mode == ViewMode::Mathlib
+                ? split_camel(child->label) : child->label);
         auto abbrev_map = build_child_abbrev_map(all_labels);
 
         for (int i = 0; i < (int)layout.size(); i++) {
@@ -267,7 +286,20 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
                 }
                 else {
                     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                        state.selected_code = child->code;
+                        // Para nodos hoja de Mathlib (lemmas/defs/theorems),
+                        // construir el código completamente calificado:
+                        // "Mathlib.A.B.C" + "." + "lemma_foo"
+                        if (state.mode == ViewMode::Mathlib
+                            && child->children.empty()
+                            && cur && cur->code != "ROOT")
+                        {
+                            std::string norm = child->code;
+                            for (char& c : norm) if (c == ' ') c = '_';
+                            state.selected_code = cur->code + "." + norm;
+                        }
+                        else {
+                            state.selected_code = child->code;
+                        }
                         state.selected_label = child->label;
                         if (!child->children.empty()) state.push(child);
                     }
@@ -276,12 +308,16 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
 
             bool has_tex = !child->texture_key.empty();
 
-            BubbleLabelLines lbl_result = make_label_lines(child->label, draw_r, LBL_FONT);
+            // Solo display: CamelCase → palabras separadas en modo Mathlib
+            const std::string display_label = (state.mode == ViewMode::Mathlib)
+                ? split_camel(child->label) : child->label;
+
+            BubbleLabelLines lbl_result = make_label_lines(display_label, draw_r, LBL_FONT);
 
             std::vector<std::string> draw_lines;
             if (lbl_result.needs_abbrev) {
-                auto it = abbrev_map.find(child->label);
-                std::string abbr = (it != abbrev_map.end()) ? it->second : child->label.substr(0, 4);
+                auto it = abbrev_map.find(display_label);
+                std::string abbr = (it != abbrev_map.end()) ? it->second : display_label.substr(0, 4);
                 draw_lines.push_back(abbr);
             }
             else {
