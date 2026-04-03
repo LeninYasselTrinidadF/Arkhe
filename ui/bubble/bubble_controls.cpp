@@ -1,6 +1,7 @@
 #include "bubble_controls.hpp"
 #include "dep_view.hpp"
-#include "../data/position_state.hpp"
+#include "../../data/position_state.hpp"
+#include "../../data/vscode_bridge.hpp"
 #include "core/overlay.hpp"
 #include "core/theme.hpp"
 #include "core/font_manager.hpp"
@@ -99,11 +100,22 @@ void draw_mode_switcher(AppState& state, Vector2 mouse) {
 
 void draw_zoom_buttons(Camera2D& cam, Vector2 mouse) {
     const Theme& th = g_theme;
-    // Tamaño del botón escala con la fuente: se basa en el texto "+" escalado
-    int btn_sz = MeasureTextF("+", 20) + g_fonts.scale(14);  // cuadrado
+    int btn_sz = MeasureTextF("+", 20) + g_fonts.scale(14);  // tamaño del botón cuadrado
     int bx = 14;
-    int by = g_split_y - btn_sz * 2 - g_fonts.scale(20);
-    Rectangle rp = { (float)bx, (float)by,              (float)btn_sz, (float)btn_sz };
+
+    // --- Posicionamiento relativo al botón VS Code ---
+    const int vs_height = 22;               // altura del botón VS
+    const int vs_margin_bottom = 10;        // margen inferior del VS hasta g_split_y
+    const int vs_top = g_split_y - vs_height - vs_margin_bottom;  // borde superior del VS
+    const int zoom_gap = 40;                // separación entre grupo zoom y botón VS
+    const int zoom_group_height = btn_sz * 2 + g_fonts.scale(6);  // altura total (+ y - con gap interno)
+    int by = vs_top - zoom_gap - zoom_group_height;   // borde superior del primer botón zoom
+
+    // Evitar que se salga por arriba (por si acaso)
+    if (by < UI_TOP() + 10) by = UI_TOP() + 10;
+
+    // --- Dibujo de los botones (sin cambios) ---
+    Rectangle rp = { (float)bx, (float)by, (float)btn_sz, (float)btn_sz };
     Rectangle rm = { (float)bx, (float)(by + btn_sz + g_fonts.scale(6)), (float)btn_sz, (float)btn_sz };
     bool hp = CheckCollisionPointRec(mouse, rp);
     bool hm = CheckCollisionPointRec(mouse, rm);
@@ -116,9 +128,10 @@ void draw_zoom_buttons(Camera2D& cam, Vector2 mouse) {
             DrawRectangleLinesEx(r, 1, th.ctrl_border);
         }
         };
-    draw_btn(rp, hp); draw_btn(rm, hm);
+    draw_btn(rp, hp);
+    draw_btn(rm, hm);
 
-    // Centrar "+" y "-" dentro de cada botón
+    // Texto "+" y "-"
     int sym_sz = 20;
     int sym_w = MeasureTextF("+", sym_sz);
     int sym_h = MeasureTextF("A", sym_sz);
@@ -128,12 +141,15 @@ void draw_zoom_buttons(Camera2D& cam, Vector2 mouse) {
         (int)rm.y + (btn_sz - sym_h) / 2,
         sym_sz, hm ? th.ctrl_text : th_alpha(th.ctrl_text_dim));
 
+    // Interacción zoom
     if (!overlay::blocks_mouse(mouse)) {
         if (hp && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
             cam.zoom = Clamp(cam.zoom + 0.15f, 0.05f, 6.0f);
         if (hm && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
             cam.zoom = Clamp(cam.zoom - 0.15f, 0.05f, 6.0f);
     }
+
+    // Indicador de porcentaje
     char zbuf[16];
     snprintf(zbuf, sizeof(zbuf), "%.0f%%", cam.zoom * 100.0f);
     int lbl_sz = 11;
@@ -141,6 +157,58 @@ void draw_zoom_buttons(Camera2D& cam, Vector2 mouse) {
     DrawTextF(zbuf, bx + btn_sz / 2 - tw / 2,
         (int)rm.y + btn_sz + g_fonts.scale(4), lbl_sz, th_alpha(th.ctrl_text_dim));
 }
+
+// Botones VS para manipulación desde VSCode
+
+
+// ── Botón "→ VS" — esquina inferior izquierda del canvas ─────────────────────
+//  Abre el archivo de entradas asociado al nodo actual
+void draw_vscode_button(AppState& state, Vector2 mouse) {
+    const Theme& th = g_theme;
+    const int bw = 54, bh = 22;
+    const int bx = 10;
+    const int by = g_split_y - bh - 10;
+
+    Rectangle r = { (float)bx, (float)by, (float)bw, (float)bh };
+    bool hov = CheckCollisionPointRec(mouse, r);
+
+    DrawRectangleRec(r, hov ? th.bg_button_hover : th_alpha(th.bg_button));
+    DrawRectangleLinesEx(r, 1.f, th_alpha(th.ctrl_border));
+
+    const char* lbl = "\xE2\x86\x92 VS";   // → VS  (UTF-8)
+    int tw = MeasureTextF(lbl, 11);
+    DrawTextF(lbl, bx + (bw - tw) / 2, by + (bh - 11) / 2, 11, th.ctrl_text);
+
+    if (hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        bridge_launch_vscode(state);
+        TraceLog(LOG_INFO, "bubble_view: VS Code lanzado desde botón");
+    }
+}
+
+
+//  Abre la carpeta de mathlib
+void draw_mathlib_button(AppState& state, Vector2 mouse) {
+    const Theme& th = g_theme;
+    const int bw = 54, bh = 22;
+    const int gap = 6;                      // separación entre botones
+    const int bx = 10 + bw + gap;           // a la derecha del botón "→ VS"
+    const int by = g_split_y - bh - 10;
+
+    Rectangle r = { (float)bx, (float)by, (float)bw, (float)bh };
+    bool hov = CheckCollisionPointRec(mouse, r);
+
+    DrawRectangleRec(r, hov ? th.bg_button_hover : th_alpha(th.bg_button));
+    DrawRectangleLinesEx(r, 1.f, th_alpha(th.ctrl_border));
+
+    const char* lbl = "ML";   // o "Mathlib" si prefieres texto más largo
+    int tw = MeasureTextF(lbl, 11);
+    DrawTextF(lbl, bx + (bw - tw) / 2, by + (bh - 11) / 2, 11, th.ctrl_text);
+
+    if (hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        bridge_launch_vscode_mathlib(state);
+    }
+}
+
 
 // ── Helper interno: botón de canvas con tamaño dinámico ──────────────────────
 // El ancho y alto se calculan desde el texto escalado + padding proporcional.

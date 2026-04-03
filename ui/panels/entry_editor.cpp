@@ -44,16 +44,8 @@ void EntryEditor::save_tex_file(MathNode* sel) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 void EntryEditor::on_save_callback(MathNode* sel, EditState& edit,
-                                    AppState& state, bool& /*show_fm*/)
+    AppState& state, bool& /*show_fm*/)
 {
-    // Necesitamos acceso a entries_index y a files_stale, que son miembros de
-    // instancia. Usamos el truco de guardar un puntero a la instancia en el
-    // estado de la toolbar (campo reutilizable). Como alternativa limpia se
-    // puede convertir el callback en std::function<> y capturar [this].
-    // Aquí optamos por std::function para no contaminar AppState.
-    //
-    // NOTA: la firma del callback es la de editor_sections; el puntero a la
-    // instancia se captura en draw() con un lambda local.
     (void)sel; (void)edit; (void)state;
     // El cuerpo real está en el lambda capturado en draw().
 }
@@ -72,12 +64,21 @@ void EntryEditor::draw(Vector2 mouse) {
     }
 
     // ── Resolver nodo seleccionado ────────────────────────────────────────────
+    // Prioridad:
+    //   1. Hijo de cur cuyo code == selected_code  (clic en burbuja hija)
+    //   2. cur mismo si su code == selected_code   (clic en burbuja central)
+    //   3. cur mismo si selected_code está vacío   (push limpió la selección;
+    //      el usuario navegó dentro de un nodo → editar ese nodo directamente)
+    // El check != "ROOT" evita exponer el nodo raíz invisible.
     MathNode* cur = state.current();
     MathNode* sel = nullptr;
     if (cur) {
         for (auto& child : cur->children)
             if (child->code == state.selected_code) { sel = child.get(); break; }
-        if (!sel && cur->code == state.selected_code) sel = cur;
+        if (!sel && cur->code == state.selected_code)
+            sel = cur;
+        if (!sel && cur->code != "ROOT")
+            sel = cur;
     }
 
     // ── Sync: al cambiar nodo, leer body desde disco ──────────────────────────
@@ -86,32 +87,31 @@ void EntryEditor::draw(Vector2 mouse) {
         auto it = entries_index.find(sel->code);
         if (it != entries_index.end()) {
             fname = it->second;
-            body  = editor_io::read_tex(state, fname);
+            body = editor_io::read_tex(state, fname);
         }
         edit.sync(sel, body, fname);
-        body_scroll  = 0;
-        files_stale  = true;
-        body_active  = false;
+        body_scroll = 0;
+        files_stale = true;
+        body_active = false;
     }
 
     // ── Frame principal ───────────────────────────────────────────────────────
     if (draw_window_frame(540, 560,
-        "EDITOR DE ENTRADAS", {130,220,130,255}, {80,120,80,255}, mouse))
+        "EDITOR DE ENTRADAS", { 130,220,130,255 }, { 80,120,80,255 }, mouse))
     {
         state.toolbar.editor_open = false;
-        state.toolbar.active_tab  = ToolbarTab::None;
+        state.toolbar.active_tab = ToolbarTab::None;
         show_file_manager = false;
         return;
     }
 
-    
     const int pw = cur_pw, ph = cur_ph;
-    const int lx = pos_x + 14, lw = pw - 28; 
+    const int lx = pos_x + 14, lw = pw - 28;
     int y = pos_y + 38;
 
     if (!sel) {
         DrawTextF("Selecciona una burbuja para editar.",
-                  lx, y + 10, 12, {120,120,160,200});
+            lx, y + 10, 12, { 120,120,160,200 });
         return;
     }
 
@@ -120,24 +120,8 @@ void EntryEditor::draw(Vector2 mouse) {
 
     editor_sections::draw_node_fields(sel, edit, state, lx, lw, y, mouse);
 
-    DrawLine(lx, y, lx + lw, y, {30,30,50,200}); y += 8;
+    DrawLine(lx, y, lx + lw, y, { 30,30,50,200 }); y += 8;
 
-    // Lambda de guardado (captura this para acceder a entries_index y files_stale)
-    auto save_fn = [&](MathNode* s, EditState& e, AppState& /*st*/, bool& /*fm*/) {
-        save_tex_file(s);
-        (void)e;
-    };
-
-    // draw_body_section espera un puntero a función; usamos un wrapper estático
-    // con estado capturado a través de una variable de función guardada en el frame.
-    // La forma más idiomática en C++14/17 sin std::function es pasar el lambda
-    // como template. Como editor_sections usa un puntero a función puro, podemos
-    // delegar a un segundo callback que capture el contexto usando una variable
-    // estática thread_local (safe en single-thread / Raylib).
-    // 
-    // Alternativa más limpia: cambiar la firma de draw_body_section a
-    // std::function<> (ver nota en editor_sections.hpp).
-    // Por ahora usamos la variable estática de frame:
     static EntryEditor* s_self = nullptr;
     s_self = this;
     editor_sections::draw_body_section(
@@ -149,15 +133,14 @@ void EntryEditor::draw(Vector2 mouse) {
         }
     );
 
-    DrawLine(lx, y, lx + lw, y, {30,30,50,200}); y += 8;
+    DrawLine(lx, y, lx + lw, y, { 30,30,50,200 }); y += 8;
 
     editor_sections::draw_resource_list(sel, lx, lw, pos_y, ph, y, mouse);
     editor_sections::draw_add_resource_form(sel, edit, state, lx, lw, pos_y, ph, y, mouse);
 
     // ── File manager (siempre encima, al final) ───────────────────────────────
-    // Refrescar lista si está desactualizada y el file manager se va a mostrar
     if (show_file_manager && files_stale) {
-        tex_files   = editor_io::list_tex_files(state);
+        tex_files = editor_io::list_tex_files(state);
         files_stale = false;
     }
 

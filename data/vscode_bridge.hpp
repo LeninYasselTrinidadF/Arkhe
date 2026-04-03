@@ -25,6 +25,7 @@
 // Ruta del archivo puente (relativa al directorio de trabajo del ejecutable).
 static constexpr const char* BRIDGE_FILE = "arkhe_bridge.json";
 
+
 // ── Estructura del estado del bridge ─────────────────────────────────────────
 
 struct BridgeState {
@@ -51,6 +52,11 @@ bool bridge_poll(BridgeState& out);
 // Primero llama bridge_write(), luego ShellExecute("code", tex_file).
 // Si tex_file está vacío abre la carpeta entries/ en su lugar.
 void bridge_launch_vscode(const AppState& state);
+
+// Lanza VS Code con la carpeta de mathlib
+void bridge_launch_vscode_mathlib(const AppState& state);
+
+
 
 // Dado un BridgeState (obtenido de bridge_poll), navega AppState al nodo
 // indicado. Busca en el árbol del modo correspondiente.

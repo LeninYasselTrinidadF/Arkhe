@@ -186,6 +186,60 @@ void bridge_launch_vscode(const AppState& state) {
 #endif
 }
 
+static std::string resolve_mathlib_lean_path(const AppState& state, const std::string& code) {
+    if (code.empty() || code == "ROOT") return {};
+
+    // Reemplazar puntos por separadores de ruta (conserva el "Mathlib" inicial)
+    std::string relative = code;
+    for (char& c : relative)
+        if (c == '.') c = '/';
+
+    std::string base = state.toolbar.mathlib_src_path;
+    if (base.empty()) return {};
+
+    // Asegurar que base termine con separador
+    if (!base.empty() && base.back() != '/' && base.back() != '\\')
+        base += '/';
+
+    return base + relative + ".lean";
+}
+
+void bridge_launch_vscode_mathlib(const AppState& state) {
+    // 1. Escribir el estado actual en el puente (como hace el botón VS)
+    bridge_write(state);
+    std::string target;
+
+    // Si estamos en modo Mathlib y hay un nodo actual (no raíz), abrir su .lean
+    if (state.mode == ViewMode::Mathlib) {
+        MathNode* cur = state.current();
+        if (cur && cur->code != "ROOT") {
+            target = resolve_mathlib_lean_path(state, cur->code);
+            if (!target.empty())
+                TraceLog(LOG_INFO, "bridge: abriendo archivo Mathlib: %s", target.c_str());
+        }
+    }
+
+    // Fallback: abrir la carpeta raíz de mathlib
+    if (target.empty()) {
+        target = state.toolbar.mathlib_src_path;
+        if (target.empty()) {
+            TraceLog(LOG_WARNING, "bridge: mathlib_src_path no configurada");
+            return;
+        }
+        TraceLog(LOG_INFO, "bridge: abriendo carpeta MathLib: %s", target.c_str());
+    }
+
+#ifdef _WIN32
+    HINSTANCE r = ShellExecuteA(nullptr, "open", "code", target.c_str(), nullptr, SW_SHOWDEFAULT);
+    if ((INT_PTR)r <= 32)
+        TraceLog(LOG_WARNING, "bridge: ShellExecute falló (code=%d). ¿Está 'code' en PATH?", (int)(INT_PTR)r);
+#else
+    std::string cmd = "code \"" + target + "\" &";
+    system(cmd.c_str());
+#endif
+}
+
+
 // ── bridge_navigate ───────────────────────────────────────────────────────────
 
 bool bridge_navigate(AppState& state, const BridgeState& bs) {

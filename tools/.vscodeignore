@@ -1,0 +1,8 @@
+.vscode/**
+node_modules/**
+src/**
+*.ts
+!out/**
+tsconfig.json
+bridge_watch.ps1
+package-lock.json

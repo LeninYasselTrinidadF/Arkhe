@@ -16,6 +16,13 @@ void draw_mode_switcher(AppState& state, Vector2 mouse);
 // Funciona con cualquier Camera2D (burbuja o dependencias).
 void draw_zoom_buttons(Camera2D& cam, Vector2 mouse);
 
+
+// Botones de conexión con VS Code (solo en modo burbuja, eje de CONTROLES).
+void draw_vscode_button(AppState& state, Vector2 mouse);
+
+void draw_mathlib_button(AppState& state, Vector2 mouse);
+
+
 // Botones del canvas en modo BURBUJAS:
 //   [Casa] / Dependencias (toggle) / Posicion / < Atrás
 void draw_canvas_buttons(AppState& state, Vector2 mouse, bool canvas_blocked);

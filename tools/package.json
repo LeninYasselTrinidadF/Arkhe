@@ -1,0 +1,106 @@
+{
+  "name": "arkhe-bridge",
+  "displayName": "Arkhe Bridge",
+  "description": "Envía el archivo activo a Arkhe y lanza Arkhe si no está corriendo.",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.110.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "publisher": "arkhe",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arkhe/arkhe-bridge"
+  },
+  "main": "./out/extension.js",
+  "scripts": {
+    "compile": "tsc -p ./"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "arkhe.sendToArkhe",
+        "title": "Arkhe: Enviar a Arkhe",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "arkhe.setArkhePath",
+        "title": "Arkhe: Configurar ruta de Arkhe (Bridge)",
+        "icon": "$(package)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "arkhe.sendToArkhe",
+        "key": "ctrl+shift+alt+a",
+        "mac": "cmd+shift+alt+a"
+      },
+      {
+        "command": "arkhe.setMathlibPath",
+        "key": "ctrl+shift+alt+m",
+        "mac": "cmd+shift+alt+m"
+      },
+      {
+        "command": "arkhe.setArkhePath",
+        "key": "ctrl+shift+alt+b",
+        "mac": "cmd+shift+alt+b"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "arkhe.sendToArkhe",
+          "group": "navigation@1"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "arkhe.sendToArkhe",
+          "group": "navigation@1"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "arkhe.sendToArkhe",
+          "when": "view == workbench.explorer.fileView && resourceExtname =~ /\\.(lean|json|txt|md|tex)$/",
+          "group": "inline"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Arkhe Bridge",
+      "properties": {
+        "arkhe.executablePath": {
+          "type": "string",
+          "default": "",
+          "description": "Ruta completa al ejecutable de Arkhe (ej: C:\\projects\\arkhe\\build\\arkhe.exe). Si está vacío, no se lanzará automáticamente."
+        },
+        "arkhe.workingDirectory": {
+          "type": "string",
+          "default": "",
+          "description": "Directorio de trabajo al lanzar Arkhe. Si está vacío, se usa la raíz del workspace."
+        },
+        "arkhe.mathlibSourcePath": {
+          "type": "string",
+          "default": "C:/Users/USUARIO/Documents/mathlib_clone",
+          "description": "Ruta raíz del repositorio de Mathlib (ej: C:\\Users\\...\\mathlib_clone). Se usa para resolver códigos de archivos .lean."
+        },
+        "arkhe.arkheSourcePath": {
+          "type": "string",
+          "default": "C:/Users/USUARIO/source/repos/Arkhe",
+          "description": "Ruta raíz del repositorio de Arkhe (donde reside arkhe_bridge.json)."
+        }
+      }
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@types/vscode": "^1.110.0",
+    "typescript": "^6.0.2"
+  }
+}

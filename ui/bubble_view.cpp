@@ -34,28 +34,6 @@ static const char* mode_name(ViewMode m) {
     return "";
 }
 
-// ── Botón "→ VS" — esquina inferior izquierda del canvas ─────────────────────
-static void draw_vscode_button(AppState& state, Vector2 mouse) {
-    const Theme& th = g_theme;
-    const int bw = 54, bh = 22;
-    const int bx = 10;
-    const int by = g_split_y - bh - 10;
-
-    Rectangle r = { (float)bx, (float)by, (float)bw, (float)bh };
-    bool hov = CheckCollisionPointRec(mouse, r);
-
-    DrawRectangleRec(r, hov ? th.bg_button_hover : th_alpha(th.bg_button));
-    DrawRectangleLinesEx(r, 1.f, th_alpha(th.ctrl_border));
-
-    const char* lbl = "\xE2\x86\x92 VS";   // → VS  (UTF-8)
-    int tw = MeasureTextF(lbl, 11);
-    DrawTextF(lbl, bx + (bw - tw) / 2, by + (bh - 11) / 2, 11, th.ctrl_text);
-
-    if (hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-        bridge_launch_vscode(state);
-        TraceLog(LOG_INFO, "bubble_view: VS Code lanzado desde botón");
-    }
-}
 
 // ── draw_bubble_view ──────────────────────────────────────────────────────────
 
@@ -73,9 +51,9 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
 
     // ── Stats de burbujas ─────────────────────────────────────────────────────
     const MathNode* stats_root = nullptr;
-    if (state.mode == ViewMode::MSC2020 && state.msc_root)      stats_root = state.msc_root.get();
+    if (state.mode == ViewMode::MSC2020 && state.msc_root)           stats_root = state.msc_root.get();
     else if (state.mode == ViewMode::Mathlib && state.mathlib_root)   stats_root = state.mathlib_root.get();
-    else if (state.mode == ViewMode::Standard && state.standard_root)  stats_root = state.standard_root.get();
+    else if (state.mode == ViewMode::Standard && state.standard_root) stats_root = state.standard_root.get();
     bubble_stats_ensure(stats_root, state.crossref_map, state.mode);
 
     // ── Radios de dibujo ──────────────────────────────────────────────────────
@@ -117,17 +95,40 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
     if (cur && !cur->children.empty())
         layout = compute_layout(cur, draw_radii, CENTER_R);
 
+    // ── Detección de nivel hoja (Mathlib) ─────────────────────────────────────
+    // Cuando estamos en Mathlib y todos los hijos de cur son hojas (sin hijos
+    // propios), cur representa un archivo .lean. La burbuja central se vuelve
+    // pulsable para seleccionar el archivo directamente sin hacer push.
+    bool at_leaf_level = state.mode == ViewMode::Mathlib
+        && cur
+        && cur->code != "ROOT"
+        && !cur->children.empty()
+        && cur->children[0]->children.empty();
+
     // ── Input: hover / pan / zoom ─────────────────────────────────────────────
+    // over_center se rastrea por separado para el comportamiento del archivo
+    bool over_center = false;
     bool over_bubble = false;
     if (cur && in_canvas && !canvas_blocked) {
         Vector2 wm = GetScreenToWorld2D(mouse, cam);
-        if (sqrtf(wm.x * wm.x + wm.y * wm.y) < CENTER_R)
+        float center_dist2 = wm.x * wm.x + wm.y * wm.y;
+        if (center_dist2 < CENTER_R * CENTER_R) {
             over_bubble = true;
-        if (!over_bubble)
+            over_center = true;
+        }
+        if (!over_center) {
             for (auto& bp : layout) {
                 float dx = wm.x - bp.x, dy = wm.y - bp.y;
                 if (dx * dx + dy * dy < bp.r * bp.r) { over_bubble = true; break; }
             }
+        }
+    }
+
+    // ── Click en burbuja central (nivel hoja Mathlib) ─────────────────────────
+    if (at_leaf_level && over_center && !canvas_blocked
+        && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        state.selected_code = cur->code;
+        state.selected_label = cur->label;
     }
 
     bool positioning = state.position_mode_active && in_canvas && !canvas_blocked;
@@ -197,6 +198,26 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
     int clw = MeasureTextF(cl_str.c_str(), 30);
     int cly = (cur && !cur->texture_key.empty()) ? 140 : -15;
     DrawTextF(cl_str.c_str(), -clw / 2, cly, 30, th.bubble_label_center);
+
+    // ── Feedback visual de la burbuja central pulsable (nivel hoja Mathlib) ───
+    if (at_leaf_level) {
+        bool center_selected = (state.selected_code == cur->code);
+
+        // Ring de selección activa (siempre visible cuando está seleccionado)
+        if (center_selected)
+            DrawCircleLinesV({ 0, 0 }, CENTER_R + 8.0f, th.accent_hover);
+
+        // Ring de hover + hint
+        if (over_center) {
+            DrawCircleLinesV({ 0, 0 }, CENTER_R + 6.0f, th.bubble_hover_ring);
+            const char* hint = center_selected ? "[ seleccionado ]" : "[ seleccionar archivo ]";
+            int hw = MeasureTextF(hint, 10);
+            Color hint_col = center_selected
+                ? th_alpha(th.accent_hover)
+                : th_alpha(th.text_secondary);
+            DrawTextF(hint, -hw / 2, (int)(CENTER_R - 24), 10, hint_col);
+        }
+    }
 
     // Burbujas hijas
     if (cur && !cur->children.empty()) {
@@ -326,4 +347,5 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
     draw_zoom_buttons(cam, mouse);
     draw_canvas_buttons(state, mouse, canvas_blocked);
     draw_vscode_button(state, mouse);
+    draw_mathlib_button(state, mouse);
 }
