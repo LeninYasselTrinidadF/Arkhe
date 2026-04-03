@@ -58,7 +58,7 @@ add_executable(Arkhe
     ui/bubble/bubble_stats.cpp
     ui/bubble/bubble_draw.cpp
     ui/bubble/bubble_label.cpp
-
+    ui/bubble/bubble_layout.cpp
 
     # ui/controls
     ui/controls/mode_switcher.cpp
@@ -68,8 +68,10 @@ add_executable(Arkhe
     ui/controls/canvas_buttons.cpp
     ui/controls/nav_sync.cpp
 
-    # ui/bubble (layout implementation)
-    ui/bubble/bubble_layout.cpp
+    # ui/key_controls
+    ui/key_controls/keyboard_nav.cpp
+    ui/key_controls/kbnav_info.cpp
+    ui/key_controls/kbnav_search.cpp
 
     # ui/dep
     ui/dep/dep_draw.cpp

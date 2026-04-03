@@ -9,6 +9,7 @@
 #include "../core/skin.hpp"
 #include "../constants.hpp"
 #include "raylib.h"
+#include "../key_controls/kbnav_info.hpp"
 
 #include <algorithm>
 #include <string>
@@ -16,6 +17,7 @@
 // ── draw_info_panel ───────────────────────────────────────────────────────────
 
 void draw_info_panel(AppState& state, Vector2 mouse) {
+    kbnav_info_begin_frame();   // ← NEW: resetea lista de ítems del frame anterior
     // 1) Polling del render LaTeX (debe ser lo primero del frame)
     poll_latex_render(state);
 
@@ -171,6 +173,14 @@ void draw_info_panel(AppState& state, Vector2 mouse) {
     if (state.resource_scroll > max_s) state.resource_scroll = max_s;
 
     EndScissorMode();
+
+    // ── Teclado zona Info ─────────────────────────────────────────────────────
+    {
+        const int SPLIT_MIN = TOOLBAR_H + 160;
+        const int SPLIT_MAX = SH() - 120;
+        kbnav_info_handle(state, SPLIT_MIN, SPLIT_MAX, g_split_y);
+        kbnav_info_draw();
+    }
 
     // 10) Scrollbar
     int full_h = y + (int)state.resource_scroll - scroll_top;

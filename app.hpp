@@ -65,6 +65,7 @@ struct LatexRenderJob {
     Texture2D           texture = {};
     bool                tex_loaded = false;
     std::atomic<bool>   thread_done{ false };
+    bool                kb_trigger = false;   // ← teclado solicita launch_latex_render
 };
 
 struct AppState {

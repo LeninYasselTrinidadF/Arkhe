@@ -2,6 +2,7 @@
 #include "dep/dep_sim.hpp"
 #include "dep/dep_draw.hpp"
 #include "bubble/bubble_controls.hpp"
+#include "key_controls/keyboard_nav.hpp"
 #include "data/position_state.hpp"
 #include "core/theme.hpp"
 #include "core/font_manager.hpp"
@@ -84,6 +85,32 @@ void dep_view_set_position_mode(AppState& state, bool on) {
     state.position_mode_active = on;
 }
 
+// ── Navegación espacial por teclado ──────────────────────────────────────────
+// Encuentra el nodo más cercano en la dirección (dx, dy) desde cur_id.
+// La heurística penaliza la desviación angular y premia la distancia corta.
+
+static std::string dep_nearest_in_dir(const std::string& cur_id, float dx, float dy) {
+    auto it = s_phys.find(cur_id);
+    if (it == s_phys.end()) return "";
+
+    float cx = it->second.x, cy = it->second.y;
+    std::string best;
+    float best_score = 1e9f;
+
+    for (auto& [id, p] : s_phys) {
+        if (id == cur_id) continue;
+        float rx = p.x - cx, ry = p.y - cy;
+        float dot = rx * dx + ry * dy;
+        if (dot <= 0.f) continue;                   // en dirección opuesta
+        float cross = fabsf(rx * dy - ry * dx);
+        float dist  = sqrtf(rx * rx + ry * ry) + 0.001f;
+        // Menor score = más en esa dirección y más cerca
+        float score = cross / dot + dist * 0.05f;
+        if (score < best_score) { best_score = score; best = id; }
+    }
+    return best;
+}
+
 // ── draw_dep_view ─────────────────────────────────────────────────────────────
 
 void draw_dep_view(AppState& state, Camera2D& dep_cam, Vector2 mouse) {
@@ -111,6 +138,43 @@ void draw_dep_view(AppState& state, Camera2D& dep_cam, Vector2 mouse) {
     }
 
     const DepGraph& use_graph = get_dep_graph_for_const(state);
+
+    // ── Sincronizar selector teclado con el foco actual ───────────────────────
+    if (g_kbnav.in(FocusZone::Canvas)) {
+        if (g_kbnav.dep_sel_id.empty() ||
+            s_phys.find(g_kbnav.dep_sel_id) == s_phys.end()) {
+            g_kbnav.dep_sel_id = s_focus_id;
+        }
+        // Navegación espacial
+        if (IsKeyPressed(KEY_LEFT)) {
+            auto n = dep_nearest_in_dir(g_kbnav.dep_sel_id, -1.f,  0.f);
+            if (!n.empty()) g_kbnav.dep_sel_id = n;
+        }
+        if (IsKeyPressed(KEY_RIGHT)) {
+            auto n = dep_nearest_in_dir(g_kbnav.dep_sel_id,  1.f,  0.f);
+            if (!n.empty()) g_kbnav.dep_sel_id = n;
+        }
+        if (IsKeyPressed(KEY_UP)) {
+            auto n = dep_nearest_in_dir(g_kbnav.dep_sel_id,  0.f, -1.f);
+            if (!n.empty()) g_kbnav.dep_sel_id = n;
+        }
+        if (IsKeyPressed(KEY_DOWN)) {
+            auto n = dep_nearest_in_dir(g_kbnav.dep_sel_id,  0.f,  1.f);
+            if (!n.empty()) g_kbnav.dep_sel_id = n;
+        }
+        // Enter → re-enfocar en el nodo seleccionado
+        if ((IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER))
+                && !g_kbnav.dep_sel_id.empty()) {
+            std::string sel = g_kbnav.dep_sel_id;
+            dep_view_init(state, sel);
+            const DepNode* dn = use_graph.get(sel);
+            if (dn) { state.selected_code = dn->id; state.selected_label = dn->label; }
+            dep_cam.target = { 0.f, 0.f };
+            dep_cam.zoom   = 1.f;
+            g_kbnav.dep_sel_id = sel;   // mantener selección en el nuevo foco
+            return;
+        }
+    }
 
     // ── Simulación ────────────────────────────────────────────────────────────
     if (s_sim_step < SIM_MAX) {
@@ -205,8 +269,7 @@ void draw_dep_view(AppState& state, Camera2D& dep_cam, Vector2 mouse) {
                 it->second.vx = 0.f;
                 it->second.vy = 0.f;
             }
-        }
-        else {
+        } else {
             auto it = s_phys.find(s_drag_id);
             if (it != s_phys.end()) {
                 std::string key = mode_prefix + s_drag_id;
@@ -228,13 +291,31 @@ void draw_dep_view(AppState& state, Camera2D& dep_cam, Vector2 mouse) {
 
             dep_draw_node(id, p, role, hov, th, state);
 
+            // ── Selector teclado: anillo exterior al nodo ─────────────────────
+            if (g_kbnav.in(FocusZone::Canvas) && id == g_kbnav.dep_sel_id) {
+                float t = (float)GetTime();
+                float pulse = 1.f + 0.05f * sinf(t * 4.f);
+                float pad = 6.f * pulse;
+                float rnd = 6.f;
+                Rectangle sel_r = { rect.x - pad, rect.y - pad,
+                                    rect.width  + pad * 2.f,
+                                    rect.height + pad * 2.f };
+                float corner = rnd / std::max(sel_r.height, 1.f);
+                DrawRectangleRoundedLinesEx(sel_r, corner, 6, 2.f,
+                                            ColorAlpha(th.accent, 0.9f));
+                DrawRectangleRoundedLinesEx(
+                    { sel_r.x - 2.f, sel_r.y - 2.f,
+                      sel_r.width + 4.f, sel_r.height + 4.f },
+                    corner, 6, 1.f,
+                    ColorAlpha(th.accent, 0.3f));
+            }
+
             if (hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                 if (state.position_mode_active) {
                     s_drag_id = id;
                     s_drag_start_mouse = GetScreenToWorld2D(mouse, dep_cam);
                     s_drag_start_world = { p.x, p.y };
-                }
-                else if (!is_focus) {
+                } else if (!is_focus) {
                     clicked_id = id;
                 }
             }
@@ -246,14 +327,14 @@ void draw_dep_view(AppState& state, Camera2D& dep_cam, Vector2 mouse) {
 
     if (!clicked_id.empty()) {
         dep_view_init(state, clicked_id);
-        // Mantener selected_code en sincronía para que Burbujas refleje el mismo nodo
+        g_kbnav.dep_sel_id = clicked_id;    // sincronizar selector teclado
         const DepNode* dn = use_graph.get(clicked_id);
         if (dn) {
-            state.selected_code = dn->id;
+            state.selected_code  = dn->id;
             state.selected_label = dn->label;
         }
         dep_cam.target = { 0.f, 0.f };
-        dep_cam.zoom = 1.f;
+        dep_cam.zoom   = 1.f;
         return;
     }
 
@@ -303,9 +384,12 @@ void draw_dep_view(AppState& state, Camera2D& dep_cam, Vector2 mouse) {
     {
         const char* hint = state.position_mode_active
             ? "Modo posicion: arrastra nodos  |  Clic en 'Posicion' para salir"
-            : "Clic en nodo para re-enfocar  |  Rueda: zoom  |  Arrastre: pan";
+            : (g_kbnav.in(FocusZone::Canvas)
+               ? "Flechas: navegar  |  Enter: re-enfocar  |  Rueda: zoom"
+               : "Clic en nodo para re-enfocar  |  Rueda: zoom  |  Arrastre: pan");
         int hw = MeasureTextF(hint, 11);
-        DrawTextF(hint, cw / 2 - hw / 2, g_split_y - 18, 11, ColorAlpha(th.text_dim, 0.4f));
+        DrawTextF(hint, cw / 2 - hw / 2, g_split_y - 18, 11,
+                  ColorAlpha(th.text_dim, 0.4f));
     }
 
     // ── Controles compartidos ─────────────────────────────────────────────────

@@ -4,6 +4,7 @@
 #include "bubble/bubble_layout.hpp"
 #include "bubble/bubble_controls.hpp"
 #include "bubble/bubble_stats.hpp"
+#include "key_controls/keyboard_nav.hpp"
 #include "core/overlay.hpp"
 #include "core/theme.hpp"
 #include "core/font_manager.hpp"
@@ -54,8 +55,6 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
             float base_r = proportional_radius(
                 bubble_stats_get(child->code).weight,
                 max_weight, CHILD_R_MIN, CHILD_R_MAX);
-
-            // Usar display label para que el radio refleje el texto real
             const std::string dlbl = (state.mode == ViewMode::Mathlib)
                 ? split_camel(child->label) : child->label;
             int nw = word_count(dlbl);
@@ -73,13 +72,64 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
     if (cur && !cur->children.empty())
         layout = compute_layout(cur, draw_radii, CENTER_R);
 
-    // ── Nivel hoja (Mathlib): burbuja central pulsable ────────────────────────
+    // ── Nivel hoja (Mathlib) ──────────────────────────────────────────────────
     bool at_leaf_level = state.mode == ViewMode::Mathlib
         && cur && cur->code != "ROOT"
         && !cur->children.empty()
         && cur->children[0]->children.empty();
 
-    // ── Input: hover / pan / zoom ─────────────────────────────────────────────
+    // ── Teclado: selector de canvas (zona Canvas, modo burbujas) ─────────────
+    if (g_kbnav.in(FocusZone::Canvas) && !state.dep_view_active && cur) {
+        int n = (int)cur->children.size();
+        // Clamp por si el árbol cambió
+        if (g_kbnav.canvas_idx > n) g_kbnav.canvas_idx = 0;
+
+        // Left / Up → anterior   (idx 0 = centro, 1..n = hijos)
+        if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_UP)) {
+            g_kbnav.canvas_idx = (g_kbnav.canvas_idx - 1 + n + 1) % (n + 1);
+        }
+        // Right / Down → siguiente
+        if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_DOWN)) {
+            g_kbnav.canvas_idx = (g_kbnav.canvas_idx + 1) % (n + 1);
+        }
+
+        // Enter → activar elemento seleccionado
+        if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER)) {
+            if (g_kbnav.canvas_idx == 0) {
+                // Centro: seleccionar si es leaf-level, o retroceder
+                if (at_leaf_level) {
+                    state.selected_code  = cur->code;
+                    state.selected_label = cur->label;
+                } else if (state.can_go_back()) {
+                    state.save_cam(cam);
+                    state.pop();
+                    g_kbnav.canvas_idx = 0;
+                }
+            } else {
+                int ci = g_kbnav.canvas_idx - 1;
+                if (ci < n) {
+                    auto& child = cur->children[ci];
+                    // Código completo para hojas Mathlib
+                    if (state.mode == ViewMode::Mathlib
+                            && child->children.empty()
+                            && cur->code != "ROOT") {
+                        std::string norm = child->code;
+                        for (char& c : norm) if (c == ' ') c = '_';
+                        state.selected_code = cur->code + "." + norm;
+                    } else {
+                        state.selected_code = child->code;
+                    }
+                    state.selected_label = child->label;
+                    if (!child->children.empty()) {
+                        state.push(child);
+                        g_kbnav.canvas_idx = 0;
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Input ratón: hover / pan / zoom ───────────────────────────────────────
     bool over_center = false, over_bubble = false;
     if (cur && in_canvas && !canvas_blocked) {
         Vector2 wm = GetScreenToWorld2D(mouse, cam);
@@ -153,6 +203,16 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
                           arc_color(state.mode, cs.progress));
     }
 
+    // ── Selector teclado: burbuja central ─────────────────────────────────────
+    if (g_kbnav.in(FocusZone::Canvas) && g_kbnav.canvas_idx == 0 && !state.dep_view_active) {
+        float t = (float)GetTime();
+        float pulse = 1.f + 0.07f * sinf(t * 4.f);
+        DrawCircleLinesV({ 0.f, 0.f }, (CENTER_R + 10.f) * pulse,
+                         ColorAlpha(th.accent, 0.85f));
+        DrawCircleLinesV({ 0.f, 0.f }, (CENTER_R + 5.f) * pulse,
+                         ColorAlpha(th.accent, 0.35f));
+    }
+
     // Label central
     const char* raw_lbl = (!cur || cur->code == "ROOT")
         ? (state.mode == ViewMode::MSC2020  ? "MSC2020"
@@ -182,7 +242,6 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
     if (cur && !cur->children.empty()) {
         Vector2 wm = GetScreenToWorld2D(mouse, cam);
 
-        // display labels para abbrev_map (Mathlib: CamelCase separado)
         std::vector<std::string> all_labels;
         all_labels.reserve(cur->children.size());
         for (auto& child : cur->children)
@@ -223,7 +282,6 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
                         drag_start_pos   = { bx, by };
                     }
                 } else if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                    // Código calificado completo para hojas Mathlib
                     if (state.mode == ViewMode::Mathlib
                             && child->children.empty()
                             && cur->code != "ROOT") {
@@ -236,6 +294,23 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
                     state.selected_label = child->label;
                     if (!child->children.empty()) state.push(child);
                 }
+            }
+
+            // ── Selector teclado: burbuja hija i ─────────────────────────────
+            if (g_kbnav.in(FocusZone::Canvas) && g_kbnav.canvas_idx == i + 1
+                    && !state.dep_view_active) {
+                float t = (float)GetTime();
+                float pulse = 1.f + 0.07f * sinf(t * 4.f);
+                DrawCircleLinesV({ bx, by }, (draw_r + 10.f) * pulse,
+                                 ColorAlpha(th.accent, 0.85f));
+                DrawCircleLinesV({ bx, by }, (draw_r + 5.f) * pulse,
+                                 ColorAlpha(th.accent, 0.35f));
+                // Mini hint debajo
+                const char* hint = child->children.empty()
+                    ? "[ Enter: seleccionar ]" : "[ Enter: entrar ]";
+                int hw = MeasureTextF(hint, 9);
+                DrawTextF(hint, (int)(bx - hw * 0.5f), (int)(by + draw_r + 4.f),
+                          9, th_alpha(th.accent));
             }
 
             // Etiqueta

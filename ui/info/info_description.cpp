@@ -4,6 +4,7 @@
 #include "../core/skin.hpp"
 #include "../constants.hpp"
 #include "../data/math_node.hpp"
+#include "../key_controls/kbnav_info.hpp"
 
 #include <fstream>
 #include <sstream>
@@ -366,7 +367,12 @@ int draw_description_block(AppState& state,
                 DrawRectangleLinesEx(btn_r, 1.0f, th_alpha(th.success));
             }
             DrawTextF(render_label, btn_x + 8, y + 5, 10, th.text_primary);
-            if (btn_hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+            // Registrar para teclado
+            kbnav_info_register_render(btn_r);
+
+            bool kb_fire = state.latex_render.kb_trigger;
+            state.latex_render.kb_trigger = false;
+            if ((btn_hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) || kb_fire)
                 launch_latex_render(state, tex_target, cached_raw);
         }
         y += 24;

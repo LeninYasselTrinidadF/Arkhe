@@ -3,6 +3,7 @@
 #include "../core/theme.hpp"
 #include "../core/skin.hpp"
 #include "../constants.hpp"
+#include "../key_controls/kbnav_info.hpp"
 
 #include <algorithm>
 #include <string>
@@ -137,6 +138,13 @@ int draw_resources_block(AppState& state, MathNode* sel,
             if (r.kind == "link" && hov &&
                 IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
                 OpenURL(r.content.c_str());
+
+            // Registrar para navegación por teclado
+            {
+                Rectangle cr = { (float)rx, (float)ry, (float)card_w, (float)card_h };
+                bool is_web = (r.kind == "link");
+                kbnav_info_register_resource(cr, r.content, is_web);
+            }
         }
         y += ((total + 2) / 3) * (card_h + 10) + 10;
     }

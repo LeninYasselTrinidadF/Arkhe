@@ -26,6 +26,7 @@
 #include "ui/dep_view.hpp"
 #include "ui/constants.hpp"
 #include "ui/core/overlay.hpp"
+#include "ui/key_controls/keyboard_nav.hpp"
 
 #include "raylib.h"
 #include "raymath.h"
@@ -134,6 +135,7 @@ int main() {
         }
 
         overlay::clear();
+        kbnav_handle_global(state, cam, dep_cam);
 
         if (state.toolbar.theme_id != prev_theme) {
             apply_theme(state.toolbar.theme_id);
@@ -216,6 +218,7 @@ int main() {
         for (int d : {-10, 0, 10}) DrawRectangle(hx + d - 2, g_split_y - 1, 4, 2, th_alpha(th.split_dots));
 
         draw_toolbar(state, mouse);
+        kbnav_draw_indicator();
 
         DrawFPS(10, SH() - 20);
         EndDrawing();

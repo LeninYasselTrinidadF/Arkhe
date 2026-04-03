@@ -3,6 +3,7 @@
 #include "../core/theme.hpp"
 #include "../core/skin.hpp"
 #include "../constants.hpp"
+#include "../key_controls/kbnav_info.hpp"
 
 #include <queue>
 #include <algorithm>
@@ -165,6 +166,12 @@ static void draw_mathlib_hit_card(AppState& state,
     if (ch > 52)
         DrawTextF("[ click para navegar ]", rx + 8, ry + 50, 8,
                  th_alpha(th.text_dim));
+
+    // Registrar para teclado
+    {
+        Rectangle cr = { (float)rx, (float)ry, (float)cw, (float)ch };
+        kbnav_info_register_crossref(cr, hit.module, InfoItemKind::MathlibHitCard);
+    }
 
     if (hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         auto found = find_node_by_code_local(state.mathlib_root, hit.module);
