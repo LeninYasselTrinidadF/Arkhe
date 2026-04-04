@@ -9,11 +9,25 @@ endif()
 project(Arkhe)
 set(CMAKE_CXX_STANDARD 20)
 
+# Resource file (set early so it's available when calling add_executable)
+set(RES_FILE "")
+if(WIN32)
+    # Prefer a configured resources.rc.in (if present), otherwise use the
+    # repository resources.rc directly so the ICON resource gets compiled.
+    if(EXISTS ${CMAKE_SOURCE_DIR}/resources.rc.in)
+        configure_file(${CMAKE_SOURCE_DIR}/resources.rc.in ${CMAKE_BINARY_DIR}/resources.rc @ONLY)
+        set(RES_FILE ${CMAKE_BINARY_DIR}/resources.rc)
+    elseif(EXISTS ${CMAKE_SOURCE_DIR}/resources.rc)
+        set(RES_FILE ${CMAKE_SOURCE_DIR}/resources.rc)
+    endif()
+endif()
+
 find_package(raylib        CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 
 add_executable(Arkhe
     main.cpp
+    app.hpp
     data/msc_loader.cpp
     data/mathlib_loader.cpp
     data/mathlib_gen.cpp
@@ -83,6 +97,12 @@ add_executable(Arkhe
 
     # búsqueda
     search/loogle.cpp
+    search/search_utils.cpp
+
+    # platform
+    platform_win_icon.cpp
+
+    ${RES_FILE}
 )
 
 target_sources(Arkhe PRIVATE

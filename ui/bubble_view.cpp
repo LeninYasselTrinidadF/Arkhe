@@ -4,6 +4,7 @@
 #include "bubble/bubble_layout.hpp"
 #include "bubble/bubble_controls.hpp"
 #include "bubble/bubble_stats.hpp"
+#include "dep/dep_sim.hpp"   // DepGraph, get_dep_graph_for_const (arco naranja)
 #include "key_controls/keyboard_nav.hpp"
 #include "core/overlay.hpp"
 #include "core/theme.hpp"
@@ -32,16 +33,16 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
 
     // ── Stats ─────────────────────────────────────────────────────────────────
     const MathNode* stats_root = nullptr;
-    if      (state.mode == ViewMode::MSC2020  && state.msc_root)     stats_root = state.msc_root.get();
-    else if (state.mode == ViewMode::Mathlib  && state.mathlib_root) stats_root = state.mathlib_root.get();
+    if (state.mode == ViewMode::MSC2020 && state.msc_root)     stats_root = state.msc_root.get();
+    else if (state.mode == ViewMode::Mathlib && state.mathlib_root) stats_root = state.mathlib_root.get();
     else if (state.mode == ViewMode::Standard && state.standard_root)stats_root = state.standard_root.get();
     bubble_stats_ensure(stats_root, state.crossref_map, state.mode);
 
     // ── Radios de dibujo ──────────────────────────────────────────────────────
-    constexpr float CENTER_R    = 178.0f;
+    constexpr float CENTER_R = 178.0f;
     constexpr float CHILD_R_MIN = 38.0f;
     constexpr float CHILD_R_MAX = 80.0f;
-    constexpr int   LBL_FONT    = 15;
+    constexpr int   LBL_FONT = 15;
 
     int max_weight = 1;
     if (cur)
@@ -59,8 +60,8 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
                 ? split_camel(child->label) : child->label;
             int nw = word_count(dlbl);
             float max_r = (nw == 1) ? base_r * 3.0f
-                        : (nw <= 3) ? base_r * 2.0f
-                        : base_r;
+                : (nw <= 3) ? base_r * 2.0f
+                : base_r;
             draw_radii.push_back((nw <= 3)
                 ? fit_radius_for_label(dlbl, base_r, max_r, LBL_FONT)
                 : base_r);
@@ -98,25 +99,28 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
             if (g_kbnav.canvas_idx == 0) {
                 // Centro: seleccionar si es leaf-level, o retroceder
                 if (at_leaf_level) {
-                    state.selected_code  = cur->code;
+                    state.selected_code = cur->code;
                     state.selected_label = cur->label;
-                } else if (state.can_go_back()) {
+                }
+                else if (state.can_go_back()) {
                     state.save_cam(cam);
                     state.pop();
                     g_kbnav.canvas_idx = 0;
                 }
-            } else {
+            }
+            else {
                 int ci = g_kbnav.canvas_idx - 1;
                 if (ci < n) {
                     auto& child = cur->children[ci];
                     // Código completo para hojas Mathlib
                     if (state.mode == ViewMode::Mathlib
-                            && child->children.empty()
-                            && cur->code != "ROOT") {
+                        && child->children.empty()
+                        && cur->code != "ROOT") {
                         std::string norm = child->code;
                         for (char& c : norm) if (c == ' ') c = '_';
                         state.selected_code = cur->code + "." + norm;
-                    } else {
+                    }
+                    else {
                         state.selected_code = child->code;
                     }
                     state.selected_label = child->label;
@@ -144,8 +148,8 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
     }
 
     if (at_leaf_level && over_center && !canvas_blocked
-            && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-        state.selected_code  = cur->code;
+        && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        state.selected_code = cur->code;
         state.selected_label = cur->label;
     }
 
@@ -155,7 +159,7 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
 
     if (in_canvas && !canvas_blocked) {
         bool pan = (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && !over_bubble && !positioning)
-                || IsMouseButtonDown(MOUSE_BUTTON_MIDDLE);
+            || IsMouseButtonDown(MOUSE_BUTTON_MIDDLE);
         if (pan) {
             Vector2 d = GetMouseDelta();
             cam.target.x -= d.x / cam.zoom;
@@ -166,7 +170,7 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
     if (wheel != 0.0f && in_canvas && !canvas_blocked) {
         cam.offset = mouse;
         cam.target = GetScreenToWorld2D(mouse, cam);
-        cam.zoom   = Clamp(cam.zoom + wheel * 0.1f, 0.05f, 5.0f);
+        cam.zoom = Clamp(cam.zoom + wheel * 0.1f, 0.05f, 5.0f);
     }
     cam.offset = { (float)CX(), (float)CCY() };
 
@@ -174,19 +178,26 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
     BeginScissorMode(0, UI_TOP(), CANVAS_W(), TOP_H());
     BeginMode2D(cam);
 
-    // Líneas de conexión
+    // Líneas de conexión (usan temp_positions si el nodo fue movido manualmente)
     if (cur && !cur->children.empty()) {
         for (int i = 0; i < (int)layout.size(); i++) {
             const auto& child = cur->children[i];
+            // Usar posición desplazada si existe, igual que al dibujar la burbuja
             float lx = layout[i].x, ly = layout[i].y;
+            auto tp_line = state.temp_positions.find(
+                state.cam_key_for(state.mode, child->code));
+            if (tp_line != state.temp_positions.end()) {
+                lx = tp_line->second.x;
+                ly = tp_line->second.y;
+            }
             float len = sqrtf(lx * lx + ly * ly);
             if (len < 0.001f) continue;
             float nx = lx / len, ny = ly / len;
             float alpha = bubble_stats_get(child->code).connected
                 ? th.bubble_line_alpha : th.bubble_line_alpha * 0.4f;
             DrawLineEx({ nx * CENTER_R, ny * CENTER_R },
-                       { lx - nx * layout[i].r, ly - ny * layout[i].r },
-                       1.5f, th_fade(child->color, alpha));
+                { lx - nx * layout[i].r, ly - ny * layout[i].r },
+                1.5f, th_fade(child->color, alpha));
         }
     }
 
@@ -195,12 +206,52 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
     Color center_col = (cur && cur->code != "ROOT")
         ? th_fade(cur->color, th.bubble_center_alpha) : th.bubble_center_flat;
     draw_bubble(state, 0.0f, 0.0f, CENTER_R, center_col,
-                cur ? cur->texture_key : "");
+        cur ? cur->texture_key : "");
 
     if (cur && cur->code != "ROOT" && !cur->children.empty()) {
         const BubbleStats& cs = bubble_stats_get(cur->code);
+
+        // ── Arco verde: fracción de hijos directos con crossref ───────────────
         draw_progress_arc(0.0f, 0.0f, CENTER_R, cs.progress, 5.0f,
-                          arc_color(state.mode, cs.progress));
+            arc_color(state.mode, cs.progress));
+
+        // ── Arco rojo: cobertura de hojas totales del subárbol ────────────────
+        // Pondera por peso (número de hojas) en lugar de contar hijos directos.
+        {
+            int total_w = 0, connected_w = 0;
+            for (auto& child : cur->children) {
+                const BubbleStats& cs2 = bubble_stats_get(child->code);
+                total_w += cs2.weight;
+                if (cs2.connected) connected_w += cs2.weight;
+            }
+            float leaf_progress = (total_w > 0)
+                ? (float)connected_w / (float)total_w : 0.0f;
+            if (leaf_progress > 0.001f) {
+                Color red_arc = { 220, 60, 60, 200 };
+                draw_progress_arc(0.0f, 0.0f, CENTER_R + 8.0f,
+                    leaf_progress, 4.0f, red_arc);
+            }
+        }
+
+        // ── Arco naranja: fracción de hijos con entradas en el grafo dep ──────
+        {
+            const DepGraph& dg = get_dep_graph_for_const(state);
+            if (!dg.empty()) {
+                int total_c = (int)cur->children.size(), dep_c = 0;
+                for (auto& child : cur->children) {
+                    const DepNode* dn = dg.find_best(child->code);
+                    if (dn && !dg.get_dependents(dn->id).empty())
+                        dep_c++;
+                }
+                float dep_progress = (total_c > 0)
+                    ? (float)dep_c / (float)total_c : 0.0f;
+                if (dep_progress > 0.001f) {
+                    Color orange_arc = { 230, 140, 30, 200 };
+                    draw_progress_arc(0.0f, 0.0f, CENTER_R + 16.0f,
+                        dep_progress, 4.0f, orange_arc);
+                }
+            }
+        }
     }
 
     // ── Selector teclado: burbuja central ─────────────────────────────────────
@@ -208,15 +259,15 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
         float t = (float)GetTime();
         float pulse = 1.f + 0.07f * sinf(t * 4.f);
         DrawCircleLinesV({ 0.f, 0.f }, (CENTER_R + 10.f) * pulse,
-                         ColorAlpha(th.accent, 0.85f));
+            ColorAlpha(th.accent, 0.85f));
         DrawCircleLinesV({ 0.f, 0.f }, (CENTER_R + 5.f) * pulse,
-                         ColorAlpha(th.accent, 0.35f));
+            ColorAlpha(th.accent, 0.35f));
     }
 
     // Label central
     const char* raw_lbl = (!cur || cur->code == "ROOT")
-        ? (state.mode == ViewMode::MSC2020  ? "MSC2020"
-         : state.mode == ViewMode::Mathlib  ? "Mathlib" : "Estandar")
+        ? (state.mode == ViewMode::MSC2020 ? "MSC2020"
+            : state.mode == ViewMode::Mathlib ? "Mathlib" : "Estandar")
         : cur->label.c_str();
     std::string cl_str(raw_lbl);
     if ((int)cl_str.size() > 18) cl_str = cl_str.substr(0, 17) + ".";
@@ -234,7 +285,7 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
             const char* hint = center_sel ? "[ seleccionado ]" : "[ seleccionar archivo ]";
             int hw = MeasureTextF(hint, 10);
             DrawTextF(hint, -hw / 2, (int)(CENTER_R - 24), 10,
-                      th_alpha(center_sel ? th.accent_hover : th.text_secondary));
+                th_alpha(center_sel ? th.accent_hover : th.text_secondary));
         }
     }
 
@@ -263,7 +314,7 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
             Color col = bubble_color(child->color, cs);
             float ddx = wm.x - bx, ddy = wm.y - by;
             bool  hov = (ddx * ddx + ddy * ddy) < (draw_r * draw_r)
-                        && in_canvas && !canvas_blocked;
+                && in_canvas && !canvas_blocked;
 
             DrawCircleV({ bx, by }, draw_r + 3.0f,
                 th_fade(child->color, th.bubble_glow_alpha * (cs.connected ? 1.0f : 0.3f)));
@@ -271,7 +322,7 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
 
             if (!child->children.empty() && cs.progress > 0.001f)
                 draw_progress_arc(bx, by, draw_r, cs.progress, 3.5f,
-                                  arc_color(state.mode, cs.progress));
+                    arc_color(state.mode, cs.progress));
 
             if (hov) {
                 DrawCircleLinesV({ bx, by }, draw_r + 6.0f, th.bubble_hover_ring);
@@ -279,16 +330,18 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
                     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                         drag_idx = i;
                         drag_start_mouse = GetMousePosition();
-                        drag_start_pos   = { bx, by };
+                        drag_start_pos = { bx, by };
                     }
-                } else if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                }
+                else if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                     if (state.mode == ViewMode::Mathlib
-                            && child->children.empty()
-                            && cur->code != "ROOT") {
+                        && child->children.empty()
+                        && cur->code != "ROOT") {
                         std::string norm = child->code;
                         for (char& c : norm) if (c == ' ') c = '_';
                         state.selected_code = cur->code + "." + norm;
-                    } else {
+                    }
+                    else {
                         state.selected_code = child->code;
                     }
                     state.selected_label = child->label;
@@ -298,19 +351,19 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
 
             // ── Selector teclado: burbuja hija i ─────────────────────────────
             if (g_kbnav.in(FocusZone::Canvas) && g_kbnav.canvas_idx == i + 1
-                    && !state.dep_view_active) {
+                && !state.dep_view_active) {
                 float t = (float)GetTime();
                 float pulse = 1.f + 0.07f * sinf(t * 4.f);
                 DrawCircleLinesV({ bx, by }, (draw_r + 10.f) * pulse,
-                                 ColorAlpha(th.accent, 0.85f));
+                    ColorAlpha(th.accent, 0.85f));
                 DrawCircleLinesV({ bx, by }, (draw_r + 5.f) * pulse,
-                                 ColorAlpha(th.accent, 0.35f));
+                    ColorAlpha(th.accent, 0.35f));
                 // Mini hint debajo
                 const char* hint = child->children.empty()
                     ? "[ Enter: seleccionar ]" : "[ Enter: entrar ]";
                 int hw = MeasureTextF(hint, 9);
                 DrawTextF(hint, (int)(bx - hw * 0.5f), (int)(by + draw_r + 4.f),
-                          9, th_alpha(th.accent));
+                    9, th_alpha(th.accent));
             }
 
             // Etiqueta
@@ -322,28 +375,29 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
                 auto it = abbrev_map.find(display_label);
                 draw_lines.push_back(it != abbrev_map.end()
                     ? it->second : display_label.substr(0, 4));
-            } else {
+            }
+            else {
                 draw_lines = lbl_result.lines;
             }
 
             int line_h = MeasureTextF("Ag", LBL_FONT), line_gap = 2;
             int total_h = (int)draw_lines.size() * line_h
-                        + ((int)draw_lines.size() - 1) * line_gap;
+                + ((int)draw_lines.size() - 1) * line_gap;
             bool has_tex = !child->texture_key.empty();
             int base_y = has_tex ? (int)(by + draw_r * 0.55f) : (int)(by - total_h / 2);
 
             for (int li = 0; li < (int)draw_lines.size(); li++) {
                 int tw = MeasureTextF(draw_lines[li].c_str(), LBL_FONT);
                 DrawTextF(draw_lines[li].c_str(),
-                          (int)(bx - tw * 0.5f),
-                          base_y + li * (line_h + line_gap),
-                          LBL_FONT, th.bubble_label_child);
+                    (int)(bx - tw * 0.5f),
+                    base_y + li * (line_h + line_gap),
+                    LBL_FONT, th.bubble_label_child);
             }
 
             if (!cs.connected && !child->children.empty()) {
                 int iw = MeasureTextF("?", 14);
                 DrawTextF("?", (int)(bx - iw * 0.5f), (int)(by - draw_r - 18),
-                          14, th_alpha(th.text_dim));
+                    14, th_alpha(th.text_dim));
             }
         }
     }
@@ -365,8 +419,9 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
                               (cm.y - drag_start_mouse.y) / cam.zoom };
             auto child = cur->children[drag_idx];
             state.temp_positions[state.cam_key_for(state.mode, child->code)] =
-                { drag_start_pos.x + delta.x, drag_start_pos.y + delta.y };
-        } else {
+            { drag_start_pos.x + delta.x, drag_start_pos.y + delta.y };
+        }
+        else {
             drag_idx = -1;
         }
     }

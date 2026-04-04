@@ -3,7 +3,7 @@
 #include "../constants.hpp"
 
 class UbicacionesPanel : public PanelWidget {
-    // PH ampliado para incluir la sección de generadores Mathlib
+    // 6 filas de ruta (46px c/u) + apply + generadores (4 btns + 2 status + reload) + padding
     static constexpr int PW = 620, PH = 520;
 
 public:

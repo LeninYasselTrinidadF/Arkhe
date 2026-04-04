@@ -29,12 +29,18 @@ struct ToolbarState {
     ToolbarTab active_tab = ToolbarTab::None;
 
     // Rutas independientes
-    char assets_path[512]   = "assets/";
-    char entries_path[512]  = "assets/entries/";
+    char assets_path[512] = "assets/";
+    char entries_path[512] = "assets/entries/";
     char graphics_path[512] = "assets/graphics/";
-    char latex_path[512]    = "C:/texlive/2025/bin/windows/pdflatex.exe";
+    char latex_path[512] = "C:/texlive/2025/bin/windows/pdflatex.exe";
     char pdftoppm_path[512] = "C:/texlive/2025/bin/windows/pdftoppm.exe";
-    char mathlib_src_path[512] = "C:/Users/USUARIO/Documents/mathlib_clone";   // ruta al repo mathlib4 (para generadores)
+    char mathlib_src_path[512] = "C:/Users/USUARIO/Documents/mathlib_clone";
+
+    // ── Rutas de override para JSONs Mathlib ──────────────────────────────────
+    // Si no están vacíos, reload_all_assets los usa en lugar de los paths por defecto.
+    // Permiten cargar un JSON externo sin regenerar desde el código fuente.
+    char mathlib_layout_override[512] = {};   // override para mathlib_layout.json
+    char mathlib_deps_override[512] = {};   // override para deps_mathlib.json
 
     // Flags de activacion
     bool assets_changed = false;
@@ -43,10 +49,10 @@ struct ToolbarState {
     int  active_field = -1;
 
     // Paneles flotantes
-    bool docs_open       = false;
-    bool editor_open     = false;
+    bool docs_open = false;
+    bool editor_open = false;
     bool ubicaciones_open = false;
-    bool config_open     = false;
+    bool config_open = false;
 
     // ── Tema visual ───────────────────────────────────────────────────────────
     // 0=Dark  1=Light  2=Bocchi  3=ChainsawMan  4=Generic
@@ -65,7 +71,7 @@ struct LatexRenderJob {
     Texture2D           texture = {};
     bool                tex_loaded = false;
     std::atomic<bool>   thread_done{ false };
-    bool                kb_trigger = false;   // ← teclado solicita launch_latex_render
+    bool                kb_trigger = false;
 };
 
 struct AppState {
@@ -96,22 +102,19 @@ struct AppState {
     LatexRenderJob latex_render;
 
     // ── Vista de dependencias ─────────────────────────────────────────────────
-    bool        dep_view_active = false;   // true → draw_dep_view en lugar de draw_bubble_view
-    std::string dep_focus_id;              // nodo central de la vista DAG
-    // Grafo de dependencias por modo (MSC2020, Mathlib, Standard).
+    bool        dep_view_active = false;
+    std::string dep_focus_id;
     DepGraph    dep_graph_msc;
     DepGraph    dep_graph_mathlib;
     DepGraph    dep_graph_standard;
-    // Compat: grafo activo (legacy name used across code)
     DepGraph    dep_graph;
 
-    // Posición/ajustes temporales de layout: key = "MSC:ID" | "ML:ID" | "STD:ID"
     bool position_mode_active = false;
     std::unordered_map<std::string, Vector2> temp_positions;
 
     // ── Generadores Mathlib ───────────────────────────────────────────────────
-    MathlibGenJob mathlib_layout_job;   // estado del hilo generador de layout
-    MathlibGenJob mathlib_deps_job;     // estado del hilo generador de deps
+    MathlibGenJob mathlib_layout_job;
+    MathlibGenJob mathlib_deps_job;
 
     struct PendingNav {
         bool        active = false;
@@ -182,9 +185,10 @@ struct AppState {
     void restore_cam(Camera2D& cam) const {
         auto cs = load_cam();
         cam.target = cs.target;
-        cam.zoom   = cs.zoom > 0.f ? cs.zoom : 1.f;
+        cam.zoom = cs.zoom > 0.f ? cs.zoom : 1.f;
     }
 };
+
 // Helper: obtener grafo de dependencias correspondiente al modo actual
 inline DepGraph& get_dep_graph_for(AppState& s) {
     switch (s.mode) {
