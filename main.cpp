@@ -1,32 +1,32 @@
 #include "app.hpp"
-#include "data/msc_loader.hpp"
-#include "data/mathlib_loader.hpp"
-#include "data/crossref_loader.hpp"
-#include "data/nav_state.hpp"
-#include "data/position_state.hpp"
-#include "data/terminal_input.hpp"
-#include "data/vscode_bridge.hpp"
-#include "search/search_utils.hpp"
+#include "data/loaders/msc_loader.hpp"
+#include "data/loaders/mathlib_loader.hpp"
+#include "data/loaders/crossref_loader.hpp"
+#include "data/state/nav_state.hpp"
+#include "data/state/position_state.hpp"
+#include "data/connect/terminal_input.hpp"
+#include "data/connect/vscode_bridge.hpp"
+#include "data/search/search_utils.hpp"
 
 // UI Core
-#include "ui/core/font_manager.hpp"
-#include "ui/core/nine_patch.hpp"
-#include "ui/core/skin.hpp"
-#include "ui/core/theme.hpp"
+#include "ui/aesthetic/font_manager.hpp"
+#include "ui/aesthetic/nine_patch.hpp"
+#include "ui/aesthetic/skin.hpp"
+#include "ui/aesthetic/theme.hpp"
 
 // UI Info
 #include "ui/info/info_panel.hpp"
 
 // UI Panels
-#include "ui/panels/search_panel.hpp"
-#include "ui/panels/toolbar.hpp"
+#include "ui/search_panel/search_panel.hpp"
+#include "ui/toolbar/toolbar.hpp"
 
 // UI Raíz / Otros
-#include "ui/bubble/bubble_stats.hpp"
-#include "ui/bubble_view.hpp"
-#include "ui/dep_view.hpp"
+#include "ui/views/bubble/bubble_stats.hpp"
+#include "ui/views/bubble_view.hpp"
+#include "ui/views/dep_view.hpp"
 #include "ui/constants.hpp"
-#include "ui/core/overlay.hpp"
+#include "ui/aesthetic/overlay.hpp"
 #include "ui/key_controls/keyboard_nav.hpp"
 
 #ifdef _WIN32

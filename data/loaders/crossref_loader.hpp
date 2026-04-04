@@ -1,5 +1,5 @@
 #pragma once
-#include "math_node.hpp"
+#include "data/math_node.hpp"
 #include <string>
 #include <unordered_map>
 #include <vector>

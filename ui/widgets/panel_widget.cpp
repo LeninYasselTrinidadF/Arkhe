@@ -1,8 +1,8 @@
-#include "panel_widget.hpp"
-#include "../core/font_manager.hpp"
-#include "../core/overlay.hpp"
-#include "../core/theme.hpp"
-#include "../constants.hpp"
+#include "ui/widgets/panel_widget.hpp"
+#include "ui/aesthetic/font_manager.hpp"
+#include "ui/aesthetic/overlay.hpp"
+#include "ui/aesthetic/theme.hpp"
+#include "ui/constants.hpp"
 #include <cstring>
 #include <algorithm>
 

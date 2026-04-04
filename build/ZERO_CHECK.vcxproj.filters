@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\USUARIO\source\repos\Arkhe\build\CMakeFiles\f23adff7ff48d250d9b41b1abece760e\generate.stamp.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{4A7BA04F-1829-3530-A77E-78A1294E54A1}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

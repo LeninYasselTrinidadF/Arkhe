@@ -1,7 +1,7 @@
 #pragma once
 #include "app.hpp"
-#include "../core/theme.hpp"
-#include "../constants.hpp"
+#include "ui/aesthetic/theme.hpp"
+#include "ui/constants.hpp"
 #include "raylib.h"
 
 // ── PanelWidget ───────────────────────────────────────────────────────────────

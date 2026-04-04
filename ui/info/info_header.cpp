@@ -1,9 +1,9 @@
-#include "info_header.hpp"
-#include "../core/font_manager.hpp"
-#include "../core/theme.hpp"
-#include "../core/skin.hpp"
-#include "../constants.hpp"
-#include "../data/math_node.hpp"
+#include "ui/info/info_header.hpp"
+#include "ui/aesthetic/font_manager.hpp"
+#include "ui/aesthetic/theme.hpp"
+#include "ui/aesthetic/skin.hpp"
+#include "ui/constants.hpp"
+#include "data/math_node.hpp"
 
 // ── Chip helper local ─────────────────────────────────────────────────────────
 // Mismo comportamiento que draw_chip en panel_widget, pero accesible aquí

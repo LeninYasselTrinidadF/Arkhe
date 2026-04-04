@@ -1,9 +1,9 @@
-#include "info_crossrefs.hpp"
-#include "../core/font_manager.hpp"
-#include "../core/theme.hpp"
-#include "../core/skin.hpp"
-#include "../constants.hpp"
-#include "../key_controls/kbnav_info.hpp"
+#include "ui/info/info_crossrefs.hpp"
+#include "ui/aesthetic/font_manager.hpp"
+#include "ui/aesthetic/theme.hpp"
+#include "ui/aesthetic/skin.hpp"
+#include "ui/constants.hpp"
+#include "ui/key_controls/kbnav_info/kbnav_info.hpp"
 
 #include <queue>
 #include <algorithm>

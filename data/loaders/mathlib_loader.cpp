@@ -1,4 +1,4 @@
-#include "mathlib_loader.hpp"
+#include "data/loaders/mathlib_loader.hpp"
 #include "raylib.h"
 #include <nlohmann/json.hpp>
 #include <fstream>

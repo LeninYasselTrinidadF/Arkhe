@@ -1,6 +1,6 @@
 #pragma once
 #include <string>
-#include "../../app.hpp"
+#include "app.hpp"
 #include "raylib.h"
 
 // ── FocusZone ─────────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 #pragma once
-#include "../app.hpp"
-#include "constants.hpp"
+#include "app.hpp"
+#include "ui/constants.hpp"
 #include "raylib.h"
 
 // Panel info (breadcrumb + selección) + panel recursos con scroll

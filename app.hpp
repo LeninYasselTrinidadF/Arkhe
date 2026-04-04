@@ -1,9 +1,9 @@
 #pragma once
 #include "data/math_node.hpp"
-#include "data/crossref_loader.hpp"
-#include "data/dep_graph.hpp"
-#include "data/mathlib_gen.hpp"
-#include "ui/core/texture_cache.hpp"
+#include "data/loaders/crossref_loader.hpp"
+#include "data/loaders/dep_graph.hpp"
+#include "data/gen/mathlib_gen.hpp"
+#include "ui/aesthetic/texture_cache.hpp"
 #include <string>
 #include <vector>
 #include <memory>

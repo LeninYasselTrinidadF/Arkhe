@@ -1,15 +1,15 @@
-#include "info_panel.hpp"
-#include "info_header.hpp"
-#include "info_description.hpp"
-#include "info_crossrefs.hpp"
-#include "info_resources.hpp"
-#include "../editor/editor_io.hpp"    // ← para resolver filename vía entries_index.json
-#include "../core/overlay.hpp"
-#include "../core/theme.hpp"
-#include "../core/skin.hpp"
-#include "../constants.hpp"
+#include "ui/info/info_panel.hpp"
+#include "ui/info/info_header.hpp"
+#include "ui/info/info_description.hpp"
+#include "ui/info/info_crossrefs.hpp"
+#include "ui/info/info_resources.hpp"
+#include "data/editor/editor_io.hpp"
+#include "ui/aesthetic/overlay.hpp"
+#include "ui/aesthetic/theme.hpp"
+#include "ui/aesthetic/skin.hpp"
+#include "ui/constants.hpp"
 #include "raylib.h"
-#include "../key_controls/kbnav_info.hpp"
+#include "ui/key_controls/kbnav_info/kbnav_info.hpp"
 
 #include <algorithm>
 #include <string>
