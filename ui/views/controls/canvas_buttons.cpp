@@ -77,13 +77,11 @@ void draw_dep_canvas_buttons(AppState& state, Camera2D& dep_cam,
     const float  BX = 14.f;
     float by = (float)(UI_TOP() + 10), bw, bh;
 
-    // [Casa]
+    // [Casa] — solo recentra la cámara; el grafo de deps no tiene "inicio"
     if (canvas_btn_impl(th, mouse, canvas_blocked, BX, by, "[Casa]",
         true, false, &bw, &bh)) {
         dep_cam.target = { 0.f, 0.f };
         dep_cam.zoom = 1.f;
-        const DepGraph& g = get_dep_graph_for_const(state);
-        if (!g.empty()) dep_view_init(state, g.nodes().begin()->second.id);
     }
     by += bh + btn_gap();
 

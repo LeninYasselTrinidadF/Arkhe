@@ -98,6 +98,10 @@ add_executable(Arkhe
     ui/key_controls/kbnav_search/kbnav_search.cpp
 
     # ui/views/dep
+    ui/views/dep/dep_camera.cpp
+    ui/views/dep/dep_hud.cpp
+    ui/views/dep/dep_input.cpp
+    ui/views/dep/dep_scene.cpp
     ui/views/dep/dep_draw.cpp
     ui/views/dep/dep_pivot.cpp
     ui/views/dep/dep_sim.cpp

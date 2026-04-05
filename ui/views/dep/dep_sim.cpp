@@ -15,33 +15,64 @@ std::string s_focus_id;
 int         s_sim_step = 0;
 bool        s_ready = false;
 
+std::vector<RingVisInfo>               s_ring_vis;
+std::unordered_map<std::string, float> s_node_target_r;
+
+static float s_rest_len = REST_LEN;
+
+// Constante local para evitar dependencia de M_PI (no siempre definido en MSVC)
+static constexpr float PI_F = 3.14159265358979323846f;
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 static float randf(float lo, float hi) {
     return lo + (float)rand() / (float)RAND_MAX * (hi - lo);
 }
 
-// ── Layered (Sugiyama-style) initial placement ────────────────────────────────
-//
-// Asigna cada nodo a una "capa" según su distancia BFS desde el foco:
-//   capa 0  = foco
-//   capa -1, -2, ... = upstream  (nodos de los que depende el foco)
-//   capa +1, +2, ... = downstream (nodos que dependen del foco)
-//
-// Los nodos se colocan en columnas verticales por capa.
-// Dentro de cada capa se ordenan por heuristica barycenter para minimizar cruces.
+struct Seg { float x0, y0, x1, y1; std::string id_a, id_b; };
 
-static void layered_init(
+static Seg make_seg(const std::string& a, const std::string& b) {
+    const NodePhys& pa = s_phys.at(a);
+    const NodePhys& pb = s_phys.at(b);
+    return { pa.x, pa.y, pb.x, pb.y, a, b };
+}
+
+static bool seg_intersect(const Seg& s1, const Seg& s2, float& t, float& u) {
+    if (s1.id_a == s2.id_a || s1.id_a == s2.id_b ||
+        s1.id_b == s2.id_a || s1.id_b == s2.id_b) return false;
+    float dx1 = s1.x1 - s1.x0, dy1 = s1.y1 - s1.y0;
+    float dx2 = s2.x1 - s2.x0, dy2 = s2.y1 - s2.y0;
+    float denom = dx1 * dy2 - dy1 * dx2;
+    if (fabsf(denom) < 1e-6f) return false;
+    float ex = s2.x0 - s1.x0, ey = s2.y0 - s1.y0;
+    t = (ex * dy2 - ey * dx2) / denom;
+    u = (ex * dy1 - ey * dx1) / denom;
+    return t > 0.01f && t < 0.99f && u > 0.01f && u < 0.99f;
+}
+
+// ── radial_init ───────────────────────────────────────────────────────────────
+// Layout en anillos concéntricos BFS con sub-anillos y barycenter angular.
+//
+//  Upstream  (d < 0): nodos de los que depende el foco → hemisferio izquierdo
+//  Downstream (d > 0): nodos que dependen del foco   → hemisferio derecho
+//
+//  Sub-anillos: cuando un nivel BFS tiene más de MAX_SUBRING_N nodos, los
+//  excedentes se colocan en un arco exterior a radio += SUB_RING_GAP, etc.
+//
+//  Barycenter angular iterativo: se procesa de menor a mayor |d|, por lo que
+//  al ordenar el anillo abs_d sus vecinos en anillos internos ya están
+//  colocados y se puede usar su ángulo como guía para reducir cruces.
+
+static void radial_init(
     const std::unordered_map<std::string, bool>& visible_ids,
     const DepGraph& graph,
     const std::string& focus_id)
 {
-    // ── 1. Asignar capas via BFS bidireccional ────────────────────────────────
-    std::unordered_map<std::string, int> layer;
-    layer[focus_id] = 0;
+    // ── 1. BFS con distancia de anillo con signo ───────────────────────────────
+    std::unordered_map<std::string, int> ring_dist;
+    ring_dist[focus_id] = 0;
 
-    // BFS upstream (nodos de los que el foco depende): capas negativas
-    {
+    {   // upstream: nodos de los que depende el foco (distancia negativa)
         std::deque<std::string> q;
         q.push_back(focus_id);
         while (!q.empty()) {
@@ -49,115 +80,165 @@ static void layered_init(
             const DepNode* dn = graph.get(cur);
             if (!dn) continue;
             for (auto& dep : dn->depends_on) {
-                if (!visible_ids.count(dep)) continue;
-                if (!layer.count(dep)) {
-                    layer[dep] = layer[cur] - 1;
-                    q.push_back(dep);
-                }
+                if (!visible_ids.count(dep) || ring_dist.count(dep)) continue;
+                ring_dist[dep] = ring_dist[cur] - 1;
+                q.push_back(dep);
             }
         }
     }
-
-    // BFS downstream (quién depende del foco): capas positivas
-    {
+    {   // downstream: nodos que dependen del foco (distancia positiva)
         std::deque<std::string> q;
         q.push_back(focus_id);
         while (!q.empty()) {
             auto cur = q.front(); q.pop_front();
             for (auto& down : graph.get_dependents(cur)) {
-                if (!visible_ids.count(down)) continue;
-                if (!layer.count(down)) {
-                    layer[down] = layer[cur] + 1;
-                    q.push_back(down);
-                }
+                if (!visible_ids.count(down) || ring_dist.count(down)) continue;
+                ring_dist[down] = ring_dist[cur] + 1;
+                q.push_back(down);
             }
         }
     }
-
-    // Nodos no alcanzados por BFS: capa 0 con desplazamiento lateral pequeño
+    // Nodos no alcanzados por BFS → anillo 0 junto al foco
     for (auto& [id, _] : visible_ids)
-        if (!layer.count(id)) layer[id] = 0;
+        if (!ring_dist.count(id)) ring_dist[id] = 0;
 
-    // ── 2. Agrupar nodos por capa ─────────────────────────────────────────────
-    std::unordered_map<int, std::vector<std::string>> by_layer;
-    for (auto& [id, l] : layer)
-        by_layer[l].push_back(id);
+    // ── 2. Agrupar por anillo ─────────────────────────────────────────────────
+    std::unordered_map<int, std::vector<std::string>> by_ring;
+    for (auto& [id, d] : ring_dist)
+        by_ring[d].push_back(id);
+    for (auto& [d, ids] : by_ring)
+        std::sort(ids.begin(), ids.end());   // orden alfabético inicial estable
 
-    int min_layer = 0, max_layer = 0;
-    for (auto& [l, _] : by_layer) {
-        min_layer = std::min(min_layer, l);
-        max_layer = std::max(max_layer, l);
+    int max_abs = 0;
+    for (auto& [d, _] : by_ring) max_abs = std::max(max_abs, abs(d));
+
+    // ── 3. Calcular radios por anillo ─────────────────────────────────────────
+    // Upstream y downstream acumulan sus radios por separado para no pisarse.
+    //
+    // FIX: el radio mínimo se calcula a partir del arco real disponible
+    // (2 * ANG_HALF), no de PI completo. Antes: inner_n * MIN_ARC_PX / PI_F
+    // → subestimaba el radio necesario, apilando nodos.
+
+    // ANG_HALF definido aquí para que la fórmula de min_r lo use.
+    const float ANG_HALF = PI_F * 0.48f;  // 86.4° cada lado; arco total ≈ 172.8°
+    // era 0.46 (82.8°) — da más margen angular
+
+    s_ring_vis.clear();
+    s_node_target_r.clear();
+
+    const float MIN_RING_STEP = s_rest_len * 1.45f;
+
+    std::unordered_map<int, float> ring_base_r;
+    ring_base_r[0] = 0.f;
+
+    float up_outer = 0.f;   // radio exterior acumulado upstream
+    float down_outer = 0.f;   // radio exterior acumulado downstream
+
+    for (int abs_d = 1; abs_d <= max_abs; abs_d++) {
+        for (int sign : { 1, -1 }) {
+            int d = abs_d * sign;
+            auto it = by_ring.find(d);
+            if (it == by_ring.end()) continue;
+
+            int N = (int)it->second.size();
+            int nsub = (N + MAX_SUBRING_N - 1) / MAX_SUBRING_N;
+            int inner_n = std::min(N, MAX_SUBRING_N);
+
+            // Radio mínimo para que los `inner_n` nodos del sub-anillo interior
+            // quepan con separación mínima MIN_ARC_PX sobre el arco 2*ANG_HALF.
+            float min_r = (inner_n * MIN_ARC_PX) / (2.f * ANG_HALF);
+
+            float& accum = (sign > 0) ? down_outer : up_outer;
+            float base = std::max(accum + MIN_RING_STEP, min_r);
+            ring_base_r[d] = base;
+            accum = base + (nsub - 1) * SUB_RING_GAP;
+
+            s_ring_vis.push_back({ d, base, nsub });
+        }
     }
 
-    // ── 3. Heuristica barycenter para reducir cruces (3 pasadas) ─────────────
-    // Orden inicial estable
-    for (auto& [l, nodes] : by_layer)
-        std::sort(nodes.begin(), nodes.end());
+    // ── 4. Colocar foco en el origen ──────────────────────────────────────────
+    {
+        auto& p = s_phys[focus_id];
+        p.x = p.y = 0.f;
+        p.vx = p.vy = 0.f;
+    }
+    s_node_target_r[focus_id] = 0.f;
 
-    // Mapeo id -> posicion actual en su capa (actualizado cada pasada)
-    std::unordered_map<std::string, float> cur_pos;
-    auto refresh_pos = [&]() {
-        cur_pos.clear();
-        for (auto& [l, nodes] : by_layer)
-            for (int i = 0; i < (int)nodes.size(); i++)
-                cur_pos[nodes[i]] = (float)i;
-        };
-    refresh_pos();
+    // ── 5. Colocar nodos de cada anillo (orden creciente de |d|) ─────────────
+    // Procesando de adentro hacia afuera, al ordenar el anillo abs_d sus vecinos
+    // internos ya están colocados → barycenter angular válido.
 
-    auto barycenter_pass = [&](bool forward) {
-        int start = forward ? min_layer + 1 : max_layer - 1;
-        int end = forward ? max_layer + 1 : min_layer - 1;
-        int step = forward ? 1 : -1;
+    for (int abs_d = 1; abs_d <= max_abs; abs_d++) {
+        for (int sign : { 1, -1 }) {
+            int d = abs_d * sign;
+            auto it = by_ring.find(d);
+            if (it == by_ring.end()) continue;
 
-        for (int l = start; l != end; l += step) {
-            auto it = by_layer.find(l);
-            if (it == by_layer.end()) continue;
-            auto& nodes = it->second;
+            auto& ids = it->second;
+            int N = (int)ids.size();
+            float base_r = ring_base_r.count(d) ? ring_base_r[d] : s_rest_len;
 
-            std::vector<std::pair<float, std::string>> scored;
-            for (auto& id : nodes) {
-                float sum = 0.f; int cnt = 0;
-                // Vecinos en la capa de referencia (capa anterior en dirección)
-                const DepNode* dn = graph.get(id);
-                if (dn) {
-                    for (auto& dep : dn->depends_on) {
-                        auto p = cur_pos.find(dep);
-                        if (p != cur_pos.end()) { sum += p->second; cnt++; }
-                    }
+            // Ángulo central del hemisferio asignado
+            float ang_center = (d < 0) ? PI_F : 0.f;
+
+            // ── Barycenter angular sort ───────────────────────────────────────
+            // Ordena los nodos del anillo por el ángulo promedio de sus
+            // vecinos ya colocados (anillos con |dist| estrictamente menor).
+            if (N > 1) {
+                std::vector<std::pair<float, std::string>> scored;
+                scored.reserve(N);
+                for (auto& id : ids) {
+                    float sum_a = 0.f;
+                    int   cnt = 0;
+
+                    auto accum_nb = [&](const std::string& nb_id) {
+                        auto ph = s_phys.find(nb_id);
+                        if (ph == s_phys.end()) return;
+                        auto rd = ring_dist.find(nb_id);
+                        if (rd == ring_dist.end()) return;
+                        if (abs(rd->second) >= abs_d) return;  // solo anillos internos
+                        sum_a += atan2f(ph->second.y, ph->second.x);
+                        cnt++;
+                        };
+
+                    const DepNode* dn = graph.get(id);
+                    if (dn) for (auto& dep : dn->depends_on) accum_nb(dep);
+                    for (auto& down : graph.get_dependents(id))  accum_nb(down);
+
+                    // Fallback: si no hay vecinos internos, mantener orden actual
+                    float bc = cnt > 0
+                        ? sum_a / cnt
+                        : ang_center + (float)scored.size() * 0.001f;
+                    scored.push_back({ bc, id });
                 }
-                for (auto& down : graph.get_dependents(id)) {
-                    auto p = cur_pos.find(down);
-                    if (p != cur_pos.end()) { sum += p->second; cnt++; }
-                }
-                float bc = (cnt > 0) ? sum / cnt : (float)scored.size() * 1000.f;
-                scored.push_back({ bc, id });
+                std::stable_sort(scored.begin(), scored.end(),
+                    [](auto& a, auto& b) { return a.first < b.first; });
+                for (int i = 0; i < N; i++) ids[i] = scored[i].second;
             }
-            std::stable_sort(scored.begin(), scored.end(),
-                [](auto& a, auto& b) { return a.first < b.first; });
-            for (int i = 0; i < (int)scored.size(); i++)
-                nodes[i] = scored[i].second;
-        }
-        refresh_pos();
-        };
 
-    barycenter_pass(true);
-    barycenter_pass(false);
-    barycenter_pass(true);
+            // ── Asignar posiciones cartesianas ────────────────────────────────
+            for (int i = 0; i < N; i++) {
+                int sub = i / MAX_SUBRING_N;
+                int in_sub = i % MAX_SUBRING_N;
+                int n_sub = std::min(MAX_SUBRING_N, N - sub * MAX_SUBRING_N);
 
-    // ── 4. Asignar posiciones XY ──────────────────────────────────────────────
-    // Capas a lo largo del eje X; nodos apilados en Y dentro de cada capa.
-    const float LAYER_W = REST_LEN * 1.15f;  // separación entre capas
-    const float NODE_H = 75.f;              // separación vertical entre nodos
+                float r = base_r + sub * SUB_RING_GAP;
+                s_node_target_r[ids[i]] = r;
 
-    for (auto& [l, nodes] : by_layer) {
-        int M = (int)nodes.size();
-        for (int i = 0; i < M; i++) {
-            auto it = s_phys.find(nodes[i]);
-            if (it == s_phys.end()) continue;
-            it->second.x = (float)l * LAYER_W + randf(-3.f, 3.f);
-            it->second.y = (i - (M - 1) * 0.5f) * NODE_H + randf(-3.f, 3.f);
-            it->second.vx = 0.f;
-            it->second.vy = 0.f;
+                float angle;
+                if (n_sub == 1)
+                    angle = ang_center;
+                else
+                    angle = ang_center - ANG_HALF
+                    + 2.f * ANG_HALF * (float)in_sub / (float)(n_sub - 1);
+
+                auto ph = s_phys.find(ids[i]);
+                if (ph == s_phys.end()) continue;
+                ph->second.x = r * cosf(angle) + randf(-4.f, 4.f);
+                ph->second.y = r * sinf(angle) + randf(-4.f, 4.f);
+                ph->second.vx = ph->second.vy = 0.f;
+            }
         }
     }
 }
@@ -169,6 +250,8 @@ void dep_sim_init(AppState& state,
     const std::unordered_map<std::string, bool>& visible_ids)
 {
     s_phys.clear();
+    s_ring_vis.clear();
+    s_node_target_r.clear();
     s_sim_step = 0;
     s_ready = false;
     s_focus_id = focus_id;
@@ -176,34 +259,63 @@ void dep_sim_init(AppState& state,
     for (auto& [id, _] : visible_ids)
         s_phys[id] = NodePhys{};
 
-    const DepGraph& graph = get_dep_graph_for_const(state);
-    layered_init(visible_ids, graph, focus_id);
+    // REST_LEN ligeramente adaptativo (el layout radial ya escala los radios)
+    int N = (int)visible_ids.size();
+    s_rest_len = REST_LEN * (1.f + 0.018f * std::max(0, N - 10));
+    s_rest_len = std::min(s_rest_len, REST_LEN * 2.2f);
 
-    // Override con posiciones guardadas manualmente por el usuario
+    const DepGraph& graph = get_dep_graph_for_const(state);
+
+    // ── Anchos dinámicos: cada nodo es tan ancho como su texto necesite ───────
+    // Estimación: font 15 ≈ 8.5 px/char, font 11 ≈ 7.0 px/char.
+    // Ancho = max(label_px, code_px) + padding. Clampado [150, 360].
+    {
+        constexpr float CHAR_W_LABEL = 8.5f;
+        constexpr float CHAR_W_CODE = 7.0f;
+        constexpr float PAD_X = 28.f;
+        constexpr float MIN_W = 150.f;
+        constexpr float MAX_W = 360.f;
+        constexpr float NODE_H = 52.f;
+
+        for (auto& [id, phys] : s_phys) {
+            const DepNode* dn = graph.get(id);
+            const std::string& label = dn ? dn->label : id;
+            float wlabel = (float)label.size() * CHAR_W_LABEL + PAD_X;
+            float wcode = (float)id.size() * CHAR_W_CODE + PAD_X;
+            phys.w = std::clamp(std::max(wlabel, wcode), MIN_W, MAX_W);
+            phys.h = NODE_H;
+        }
+    }
+
+    radial_init(visible_ids, graph, focus_id);
+
+    // Override con posiciones manuales guardadas por el usuario
     std::string prefix =
         state.mode == ViewMode::MSC2020 ? "MSC:" :
         state.mode == ViewMode::Mathlib ? "ML:" : "STD:";
 
     for (auto& [k, v] : state.temp_positions) {
-        if (k.rfind(prefix, 0) == 0) {
-            std::string id = k.substr(prefix.size());
-            auto it = s_phys.find(id);
-            if (it != s_phys.end()) {
-                it->second.x = v.x;
-                it->second.y = v.y;
-                it->second.vx = 0.f;
-                it->second.vy = 0.f;
-            }
+        if (k.rfind(prefix, 0) != 0) continue;
+        std::string id = k.substr(prefix.size());
+        auto it = s_phys.find(id);
+        if (it != s_phys.end()) {
+            it->second.x = v.x;
+            it->second.y = v.y;
+            it->second.vx = it->second.vy = 0.f;
+            // No anclar nodos con posición guardada manualmente
+            s_node_target_r.erase(id);
         }
     }
+
+    // Para grafos grandes el layout radial ya es suficiente.
+    // La simulación no mejora el resultado: la repulsión O(N²) destruye la
+    // estructura de anillos más rápido de lo que el anclaje puede restaurarla.
+    if (N > 60) s_sim_step = SIM_MAX;
 
     s_ready = true;
 }
 
 // ── dep_sim_step ──────────────────────────────────────────────────────────────
-// El force-directed actua como refinador local sobre el layout jerarquico:
-// solo corrige superposiciones y tensiones residuales, no resuelve el layout
-// desde cero. Parametros mas suaves que el solver original.
 
 void dep_sim_step(const AppState& state) {
     if (s_phys.size() < 2) { s_sim_step = SIM_MAX; return; }
@@ -211,31 +323,47 @@ void dep_sim_step(const AppState& state) {
     std::vector<std::string> ids;
     ids.reserve(s_phys.size());
     for (auto& [id, _] : s_phys) ids.push_back(id);
+    const int N = (int)ids.size();
 
-    // Cooling: fuerza decrece con el tiempo para estabilizar antes
-    float t = (float)s_sim_step / SIM_MAX;
-    float cooling = 1.0f - t * 0.7f;   // 1.0 → 0.3 a lo largo de la sim
+    float t_norm = (float)s_sim_step / SIM_MAX;
+    float cooling = 1.0f - t_norm * 0.80f;   // 1.0 → 0.20
 
-    // ── Repulsion entre nodos cercanos ────────────────────────────────────────
-    const float REPEL_CUTOFF2 = (REST_LEN * 1.6f) * (REST_LEN * 1.6f);
-    for (int i = 0; i < (int)ids.size(); i++) {
+    // ── 1. Repulsión nodo-nodo ─────────────────────────────────────────────────
+    const float REPEL_CUTOFF2 = (s_rest_len * 2.0f) * (s_rest_len * 2.0f);
+
+    for (int i = 0; i < N; i++) {
         auto& a = s_phys[ids[i]];
-        for (int j = i + 1; j < (int)ids.size(); j++) {
+        for (int j = i + 1; j < N; j++) {
             auto& b = s_phys[ids[j]];
             float dx = b.x - a.x, dy = b.y - a.y;
             float d2 = dx * dx + dy * dy + 1.f;
-            if (d2 > REPEL_CUTOFF2) continue;
-            float d = sqrtf(d2);
-            float f = (K_REPEL * cooling) / d2;
-            float fx = f * dx / d, fy = f * dy / d;
-            b.vx += fx; b.vy += fy;
-            a.vx -= fx; a.vy -= fy;
+
+            // Separación mínima dinámica: semisuma de anchos reales + gap 20px
+            float min_sep = (a.w + b.w) * 0.5f + 20.f;
+
+            if (d2 < min_sep * min_sep) {
+                // Separación forzada: solapamiento
+                float d = sqrtf(d2);
+                float ovl = (min_sep - d) / d;
+                float fx = dx * ovl * 0.5f;
+                float fy = dy * ovl * 0.5f;
+                b.vx += fx * 1.9f; b.vy += fy * 1.9f;
+                a.vx -= fx * 1.9f; a.vy -= fy * 1.9f;
+            }
+            else if (d2 < REPEL_CUTOFF2) {
+                float d = sqrtf(d2);
+                float f = (K_REPEL * cooling) / d2;
+                float nx = dx / d, ny = dy / d;
+                b.vx += f * nx; b.vy += f * ny;
+                a.vx -= f * nx; a.vy -= f * ny;
+            }
         }
     }
 
-    // ── Spring: solo actua sobre aristas muy largas (no comprime el layout) ───
+    // ── 2. Spring: solo aristas demasiado largas ───────────────────────────────
     const DepGraph& use_graph = get_dep_graph_for_const(state);
-    const float SPRING_THRESHOLD = REST_LEN * 1.4f;
+    const float SPRING_THRESH = s_rest_len * 1.25f;
+
     for (auto& [id, node] : use_graph.nodes()) {
         auto ia = s_phys.find(id);
         if (ia == s_phys.end()) continue;
@@ -245,24 +373,77 @@ void dep_sim_step(const AppState& state) {
             float dx = ib->second.x - ia->second.x;
             float dy = ib->second.y - ia->second.y;
             float d = sqrtf(dx * dx + dy * dy) + 0.001f;
-            if (d < SPRING_THRESHOLD) continue;
-            float stretch = (d - REST_LEN) / d;
+            if (d < SPRING_THRESH) continue;
+            float stretch = (d - s_rest_len) / d;
             float f = K_ATTRACT * cooling * stretch;
-            float fx = f * dx, fy = f * dy;
-            ia->second.vx += fx; ia->second.vy += fy;
-            ib->second.vx -= fx; ib->second.vy -= fy;
+            ia->second.vx += f * dx; ia->second.vy += f * dy;
+            ib->second.vx -= f * dx; ib->second.vy -= f * dy;
         }
     }
 
-    // ── Atraccion debil del foco al origen ────────────────────────────────────
+    // ── 3. Anclaje radial ────────────────────────────────────────────────────
+    // FIX: el anclaje arranca con más fuerza (0.30 en lugar de 0.15) para que
+    // la repulsión no tenga tiempo de dispersar los nodos lejos de sus anillos
+    // antes de que el anclaje tome control.
+    //   t_norm=0 → factor = 0.30
+    //   t_norm=1 → factor = 1.00
+    float radial_str = K_RADIAL * (0.30f + 0.70f * t_norm);
+    for (auto& [id, target_r] : s_node_target_r) {
+        if (id == s_focus_id) continue;
+        auto it = s_phys.find(id);
+        if (it == s_phys.end()) continue;
+        auto& p = it->second;
+        float r = sqrtf(p.x * p.x + p.y * p.y);
+        if (r < 0.5f) { p.x += randf(-6.f, 6.f); continue; }
+        float err = (r - target_r) / r;
+        float f = radial_str * err;
+        p.vx -= f * p.x;
+        p.vy -= f * p.y;
+    }
+
+    // ── 4. Fuerza de descruce ─────────────────────────────────────────────────
+    // Solo para grafos pequeños (≤ 80 nodos) y primera mitad de la simulación,
+    // dado que el layout radial ya minimiza cruces estructuralmente.
+    if (N <= 80 && cooling > 0.40f && (s_sim_step % 2 == 0)) {
+        std::vector<Seg> segs;
+        segs.reserve(use_graph.nodes().size() * 2);
+        for (auto& [id, node] : use_graph.nodes()) {
+            if (s_phys.find(id) == s_phys.end()) continue;
+            for (auto& dep_id : node.depends_on) {
+                if (s_phys.find(dep_id) == s_phys.end()) continue;
+                segs.push_back(make_seg(id, dep_id));
+            }
+        }
+        for (int si = 0; si < (int)segs.size(); si++) {
+            for (int sj = si + 1; sj < (int)segs.size(); sj++) {
+                float t, u;
+                if (!seg_intersect(segs[si], segs[sj], t, u)) continue;
+                float cx = segs[si].x0 + t * (segs[si].x1 - segs[si].x0);
+                float cy = segs[si].y0 + t * (segs[si].y1 - segs[si].y0);
+                auto push_away = [&](const std::string& nid) {
+                    auto it = s_phys.find(nid);
+                    if (it == s_phys.end()) return;
+                    float dx = it->second.x - cx, dy = it->second.y - cy;
+                    float d = sqrtf(dx * dx + dy * dy) + 0.001f;
+                    float f = K_UNCROSS * cooling / d;
+                    it->second.vx += f * dx;
+                    it->second.vy += f * dy;
+                    };
+                push_away(segs[si].id_a); push_away(segs[si].id_b);
+                push_away(segs[sj].id_a); push_away(segs[sj].id_b);
+            }
+        }
+    }
+
+    // ── 5. Atracción del foco al origen ───────────────────────────────────────
     auto fi = s_phys.find(s_focus_id);
     if (fi != s_phys.end()) {
         fi->second.vx -= fi->second.x * K_CENTER * cooling;
         fi->second.vy -= fi->second.y * K_CENTER * cooling;
     }
 
-    // ── Integracion ───────────────────────────────────────────────────────────
-    const float MAX_V = 30.f * cooling + 5.f;
+    // ── 6. Integración ────────────────────────────────────────────────────────
+    const float MAX_V = 30.f * cooling + 4.f;
     for (auto& [id, p] : s_phys) {
         p.vx *= DAMPING;
         p.vy *= DAMPING;
