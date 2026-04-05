@@ -41,32 +41,38 @@ void kbnav_info_register_render(Rectangle r) {
 }
 
 void kbnav_info_register_resource(Rectangle r, const std::string& url_or_code,
-                                   bool is_web_link) {
+    bool is_web_link) {
     InfoItemKind k = is_web_link ? InfoItemKind::ResourceLink
-                                 : InfoItemKind::CrossrefCard;
+        : InfoItemKind::CrossrefCard;
     g_kbinfo.push({ k, r, url_or_code });
 }
 
 void kbnav_info_register_crossref(Rectangle r, const std::string& code,
-                                  InfoItemKind kind) {
+    InfoItemKind kind) {
     g_kbinfo.push({ kind, r, code });
 }
 
 // ── kbnav_info_handle ─────────────────────────────────────────────────────────
 
 bool kbnav_info_handle(AppState& state, int split_y_min, int split_y_max,
-                       int& g_split_y) {
+    int& g_split_y) {
     if (!g_kbnav.in(FocusZone::Info)) return false;
 
+    // Paneles modales del toolbar absorben todo el teclado
+    if (state.toolbar.ubicaciones_open || state.toolbar.docs_open
+        || state.toolbar.editor_open || state.toolbar.config_open)
+        return false;
+
     bool consumed = false;
-    int  n        = g_kbinfo.count();
+    int  n = g_kbinfo.count();
 
     // ── Espacio: expandir / contraer info_panel ───────────────────────────────
     if (IsKeyPressed(KEY_SPACE)) {
         if (!g_kbinfo.expanded) {
             // Expandir al máximo (panel al mínimo posible)
             g_split_y = split_y_min;
-        } else {
+        }
+        else {
             // Volver a posición media heurística
             g_split_y = (split_y_min + split_y_max) / 2;
         }
@@ -110,19 +116,19 @@ bool kbnav_info_handle(AppState& state, int split_y_min, int split_y_max,
                     // el usuario confirma con Enter un segundo frame. En la
                     // práctica, añadir un flag en AppState es la solución correcta.
                     // Por ahora reseteamos el job si está en estado Idle/Failed.
-                    {
-                        auto& job = state.latex_render;
-                        if (job.state == LatexRenderState::Idle ||
-                            job.state == LatexRenderState::Failed) {
-                            // Señal: poner state en "listo para compilar"
-                            // (info_description.cpp lo detectará porque can_render=true
-                            //  y el botón estará resaltado; el usuario pulsa Enter de nuevo).
-                            // Para trigger directo, marcamos un flag extra en el job:
-                            job.kb_trigger = true;  // ver nota abajo (*)
-                        }
+                {
+                    auto& job = state.latex_render;
+                    if (job.state == LatexRenderState::Idle ||
+                        job.state == LatexRenderState::Failed) {
+                        // Señal: poner state en "listo para compilar"
+                        // (info_description.cpp lo detectará porque can_render=true
+                        //  y el botón estará resaltado; el usuario pulsa Enter de nuevo).
+                        // Para trigger directo, marcamos un flag extra en el job:
+                        job.kb_trigger = true;  // ver nota abajo (*)
                     }
-                    consumed = true;
-                    break;
+                }
+                consumed = true;
+                break;
 
                 case InfoItemKind::ResourceLink:
                     if (!it->data.empty())
@@ -132,27 +138,27 @@ bool kbnav_info_handle(AppState& state, int split_y_min, int split_y_max,
 
                 case InfoItemKind::CrossrefCard:
                     // Navegar al nodo MSC
-                    {
-                        auto f = find_node_bfs(state.msc_root, it->data);
-                        if (f)
-                            state.pending_nav = { true, ViewMode::MSC2020,
-                                                  f->code, f->label,
-                                                  state.msc_root, f };
-                    }
-                    consumed = true;
-                    break;
+                {
+                    auto f = find_node_bfs(state.msc_root, it->data);
+                    if (f)
+                        state.pending_nav = { true, ViewMode::MSC2020,
+                                              f->code, f->label,
+                                              state.msc_root, f };
+                }
+                consumed = true;
+                break;
 
                 case InfoItemKind::MathlibHitCard:
                     // Navegar al módulo Mathlib
-                    {
-                        auto f = find_node_bfs(state.mathlib_root, it->data);
-                        if (f)
-                            state.pending_nav = { true, ViewMode::Mathlib,
-                                                  f->code, f->label,
-                                                  state.mathlib_root, f };
-                    }
-                    consumed = true;
-                    break;
+                {
+                    auto f = find_node_bfs(state.mathlib_root, it->data);
+                    if (f)
+                        state.pending_nav = { true, ViewMode::Mathlib,
+                                              f->code, f->label,
+                                              state.mathlib_root, f };
+                }
+                consumed = true;
+                break;
 
                 default: break;
                 }
@@ -172,9 +178,9 @@ void kbnav_info_draw() {
     int idx = std::clamp(g_kbnav.info_idx, 0, g_kbinfo.count() - 1);
     const InfoNavItem& it = g_kbinfo.items[idx];
 
-    const Theme& th  = g_theme;
-    float t          = (float)GetTime();
-    float alpha      = 0.55f + 0.45f * sinf(t * 5.f);
+    const Theme& th = g_theme;
+    float t = (float)GetTime();
+    float alpha = 0.55f + 0.45f * sinf(t * 5.f);
 
     // Borde exterior pulsante
     DrawRectangleLinesEx(it.rect, 2.f, ColorAlpha(th.accent, alpha));
@@ -196,9 +202,9 @@ void kbnav_info_draw() {
     if (hint) {
         int hw = MeasureTextF(hint, 9);
         DrawTextF(hint,
-                  (int)(it.rect.x + it.rect.width  - hw - 4),
-                  (int)(it.rect.y + it.rect.height - 12),
-                  9, ColorAlpha(th.accent, 0.75f));
+            (int)(it.rect.x + it.rect.width - hw - 4),
+            (int)(it.rect.y + it.rect.height - 12),
+            9, ColorAlpha(th.accent, 0.75f));
     }
 }
 

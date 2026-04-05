@@ -30,18 +30,12 @@
 #include "ui/key_controls/keyboard_nav.hpp"
 
 #ifdef _WIN32
-// We rely on the resources.rc being compiled into the executable (see CMakeLists)
-// to provide the taskbar/exe icon. Avoid pulling <windows.h> into this file to
-// prevent macro/name collisions with raylib. Platform-specific Win32 calls are
-// implemented in platform_win_icon.cpp.
 #endif
 #include "raylib.h"
 #include "raymath.h"
 #include <fstream>
 #include <cstring>
 #include <filesystem>
-// On Windows we need GetModuleFileNameA to locate the exe directory.
-// Include <windows.h> before raylib to avoid macro/name collisions.
 
 int g_split_y = TOOLBAR_H + 640;
 
@@ -53,8 +47,6 @@ static std::string asset_path(AppState& state, const char* rel) {
     return ensure_slash(state.toolbar.assets_path) + rel;
 }
 
-// ── Resuelve la ruta final de un JSON Mathlib ─────────────────────────────────
-// Si el override está definido, lo usa; si no, construye desde assets_path.
 static std::string resolve_layout_path(AppState& state) {
     return state.toolbar.mathlib_layout_override[0]
         ? std::string(state.toolbar.mathlib_layout_override)
@@ -106,12 +98,6 @@ int main() {
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(1400, 900, "Arkhe");
 
-// On Windows the compiled resources.rc will set the application's icon used
-// by the taskbar. No runtime Win32 calls are necessary here.
-
-    // Try to set a window icon at runtime. Prefer an .ico if present, fall back
-    // to a .png. Also print diagnostics so we can see where the app is looking
-    // for the assets when running from the build output directory.
     const char* iconCandidates[] = { "assets/graphics/icon.ico", "assets/graphics/icon.png" };
     try {
         std::string cwd = std::filesystem::current_path().string();
@@ -124,11 +110,9 @@ int main() {
                 printf("Icon not found at '%s' (relative to CWD)\n", iconRel);
                 continue;
             }
-
             printf("Icon exists at relative path. Trying LoadImage('%s')...\n", iconRel);
             Image icon = LoadImage(iconRel);
             if (icon.data != NULL) {
-                // Convert to RGBA if necessary before calling SetWindowIcon.
                 if (icon.format != PIXELFORMAT_UNCOMPRESSED_R8G8B8A8) {
                     printf("Converting icon image to PIXELFORMAT_UNCOMPRESSED_R8G8B8A8\n");
                     ImageFormat(&icon, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
@@ -136,29 +120,21 @@ int main() {
                 SetWindowIcon(icon);
                 UnloadImage(icon);
                 printf("Icon loaded and set from relative path (%s).\n", iconRel);
-                break; // stop after first successful load
-            } else {
+                break;
+            }
+            else {
                 printf("LoadImage returned empty image for '%s'\n", iconRel);
             }
         }
-
-        // Note: the taskbar/executable icon is provided by the compiled resource
-        // (resources.rc). The runtime SetWindowIcon sets the GLFW window icon but
-        // Windows may still show the exe resource on the taskbar.
-    } catch (const std::exception& e) {
+    }
+    catch (const std::exception& e) {
         printf("Exception checking icon file: %s\n", e.what());
     }
 
-    // On Windows, try to set the Win32 taskbar/exe icon from compiled resources.
-    // Implementation is in platform_win_icon.cpp so we avoid including <windows.h>
-    // in this translation unit.
 #ifdef _WIN32
     void set_win32_icon_from_resource();
     set_win32_icon_from_resource();
 #endif
-    // ----------------------------------
-
-
 
     SetTargetFPS(60);
     apply_theme(0);
@@ -223,7 +199,15 @@ int main() {
                 bridge_navigate(state, bs);
         }
 
+        // ── Overlay: limpiar y, si hay panel modal, bloquear todo ─────────────
         overlay::clear();
+        const bool modal_open = state.toolbar.ubicaciones_open
+            || state.toolbar.docs_open
+            || state.toolbar.editor_open
+            || state.toolbar.config_open;
+        if (modal_open)
+            overlay::push_rect({ 0.f, 0.f, (float)SW(), (float)SH() });
+
         kbnav_handle_global(state, cam, dep_cam);
 
         if (state.toolbar.theme_id != prev_theme) {
@@ -278,7 +262,9 @@ int main() {
         int cur_depth = (int)state.nav_stack.size();
         if (cur_depth != prev_depth) { state.restore_cam(cam); prev_depth = cur_depth; }
 
-        if (IsKeyPressed(KEY_ESCAPE)) {
+        const bool text_field_active = (state.toolbar.active_field >= 0)
+            || (state.toolbar.active_field == -99);
+        if (IsKeyPressed(KEY_ESCAPE) && !modal_open && !text_field_active) {
             if (state.dep_view_active) {
                 state.dep_view_active = false;
             }

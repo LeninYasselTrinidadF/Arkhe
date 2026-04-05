@@ -3,8 +3,8 @@
 #include "ui/constants.hpp"
 
 class UbicacionesPanel : public PanelWidget {
-    // 6 filas de ruta (46px c/u) + apply + generadores (4 btns + 2 status + reload) + padding
-    static constexpr int PW = 620, PH = 520;
+    // 6 filas de ruta (46px c/u) + apply + generadores + acople (3 btns + status) + padding
+    static constexpr int PW = 620, PH = 640;
 
 public:
     explicit UbicacionesPanel(AppState& s) : PanelWidget(s) {

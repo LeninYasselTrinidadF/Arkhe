@@ -17,8 +17,7 @@
 // ── draw_info_panel ───────────────────────────────────────────────────────────
 
 void draw_info_panel(AppState& state, Vector2 mouse) {
-    kbnav_info_begin_frame();   // ← NEW: resetea lista de ítems del frame anterior
-    // 1) Polling del render LaTeX (debe ser lo primero del frame)
+    kbnav_info_begin_frame();
     poll_latex_render(state);
 
     const Theme& th = g_theme;
@@ -30,7 +29,17 @@ void draw_info_panel(AppState& state, Vector2 mouse) {
     int scroll_top = top + HEADER_H;
     int scroll_h = vh - HEADER_H;
 
-    // 2) Fondo del panel inferior
+    // ── Si hay un panel modal flotante, no procesar input del mouse ───────────
+    // overlay::blocks_mouse devuelve true cuando main.cpp empujó el rect
+    // full-screen (cualquier panel de toolbar abierto). Se neutraliza el mouse
+    // para que hover, clicks y scroll wheel no actúen, pero el panel sigue
+    // dibujándose normalmente.
+    const bool info_blocked = overlay::blocks_mouse(mouse);
+    const Vector2 eff_mouse = info_blocked
+        ? Vector2{ -9999.f, -9999.f }
+    : mouse;
+
+    // Fondo del panel inferior
     if (g_skin.panel.valid())
         g_skin.panel.draw(0.0f, (float)top, (float)w, (float)vh, th.bg_app);
     else
@@ -38,12 +47,12 @@ void draw_info_panel(AppState& state, Vector2 mouse) {
 
     DrawLine(0, top, w, top, th_alpha(th.split_vline));
 
-    // 3) Cabecera (breadcrumb + título + chips)
+    // Cabecera (breadcrumb + título + chips) — solo visual, sin input
     draw_info_header(state, top, w);
     DrawLine(0, top + HEADER_H, w, top + HEADER_H, th_alpha(th.border));
 
-    // 4) Scroll con rueda
-    if (mouse.y > scroll_top) {
+    // Scroll con rueda — solo cuando no está bloqueado
+    if (!info_blocked && mouse.y > scroll_top) {
         float wh = GetMouseWheelMove();
         if (wh != 0.0f) {
             state.resource_scroll -= wh * 32.0f;
@@ -51,7 +60,7 @@ void draw_info_panel(AppState& state, Vector2 mouse) {
         }
     }
 
-    // 5) Nodo seleccionado
+    // Nodo seleccionado
     MathNode* cur = state.current();
     MathNode* sel = nullptr;
     if (cur) {
@@ -63,11 +72,11 @@ void draw_info_panel(AppState& state, Vector2 mouse) {
         }
     }
 
-    // 6) Refs cruzadas activas
+    // Refs cruzadas activas
     std::vector<std::string> active_msc, active_std;
     collect_active_codes(state, sel, active_msc, active_std);
 
-    // 7) Hits inversos Mathlib
+    // Hits inversos Mathlib
     bool show_inverse = (state.mode == ViewMode::MSC2020 ||
         state.mode == ViewMode::Standard) &&
         state.mathlib_root &&
@@ -89,16 +98,10 @@ void draw_info_panel(AppState& state, Vector2 mouse) {
         }
     }
 
-    // 8) Cache de .tex
-    // ─────────────────────────────────────────────────────────────────────────
-    // Problema anterior: load_entry_tex buscaba "<entries_path>/<code>.tex"
-    // directamente, pero el editor guarda con safe_filename() y registra el
-    // mapeo en entries_index.json. Ahora consultamos el índice primero.
-    // ─────────────────────────────────────────────────────────────────────────
+    // Cache de .tex
     static std::string cached_code;
     static std::string cached_raw;
     static std::string cached_display;
-    // El índice se recarga solo cuando cambia el nodo (no cada frame).
     static std::unordered_map<std::string, std::string> s_index;
 
     std::string tex_target = sel ? sel->code
@@ -106,23 +109,15 @@ void draw_info_panel(AppState& state, Vector2 mouse) {
 
     if (tex_target != cached_code) {
         cached_code = tex_target;
-
-        // Recargar índice para obtener el filename real
         editor_io::load_index(state, s_index);
-
         cached_raw.clear();
         if (!tex_target.empty() && tex_target != "ROOT") {
             auto it = s_index.find(tex_target);
-            if (it != s_index.end()) {
-                // Filename registrado por el editor (safe_filename)
+            if (it != s_index.end())
                 cached_raw = editor_io::read_tex(state, it->second);
-            }
-            // Si no está en el índice, el nodo no tiene .tex asociado → vacío
         }
-
         cached_display = cached_raw.empty() ? "" : tex_to_display(cached_raw);
 
-        // Reset del job LaTeX al cambiar de nodo
         auto& job = state.latex_render;
         if (job.tex_code != tex_target) {
             if (job.tex_loaded) {
@@ -136,7 +131,7 @@ void draw_info_panel(AppState& state, Vector2 mouse) {
         }
     }
 
-    // 9) Área scrollable con scissor
+    // Área scrollable con scissor
     const int col = 18;
     const int card_w = (w - col * 2 - 10 * 2) / 3;
     const int card_h = 68;
@@ -144,37 +139,34 @@ void draw_info_panel(AppState& state, Vector2 mouse) {
     BeginScissorMode(0, scroll_top, w, scroll_h);
     int y = scroll_top + 14 - (int)state.resource_scroll;
 
-    // Sprite preview (esquina derecha)
+    // Todas las funciones de dibujo reciben eff_mouse: si hay modal, el mouse
+    // está en (-9999,-9999) y ningún hover ni click se activa.
     draw_sprite_preview(state, sel, w - 56 - col, y, 56);
 
-    // Descripción / LaTeX
     y = draw_description_block(state, sel, tex_target,
         cached_raw, cached_display,
-        mouse, col, y, w - col * 2, scroll_h);
+        eff_mouse, col, y, w - col * 2, scroll_h);
     y += 14;
     DrawLine(col, y, w - col, y, th_alpha(th.border));
     y += 14;
 
-    // Proceso inverso
     if (show_inverse)
-        y = draw_inverse_block(state, sel, inverse_hits, col, y, card_w, mouse);
+        y = draw_inverse_block(state, sel, inverse_hits,
+            col, y, card_w, eff_mouse);
 
-    // Crossrefs
     if (!active_msc.empty() || !active_std.empty())
         y = draw_crossrefs_block(state, active_msc, active_std,
-            col, y, card_w, card_h, w, mouse);
+            col, y, card_w, card_h, w, eff_mouse);
 
-    // Recursos
-    y = draw_resources_block(state, sel, col, y, card_w, card_h, mouse);
+    y = draw_resources_block(state, sel, col, y, card_w, card_h, eff_mouse);
 
-    // Clamp scroll
     float max_s = (float)std::max(0, y + (int)state.resource_scroll
         - scroll_h - scroll_top + 40);
     if (state.resource_scroll > max_s) state.resource_scroll = max_s;
 
     EndScissorMode();
 
-    // ── Teclado zona Info ─────────────────────────────────────────────────────
+    // Teclado zona Info
     {
         const int SPLIT_MIN = TOOLBAR_H + 160;
         const int SPLIT_MAX = SH() - 120;
@@ -182,7 +174,7 @@ void draw_info_panel(AppState& state, Vector2 mouse) {
         kbnav_info_draw();
     }
 
-    // 10) Scrollbar
+    // Scrollbar
     int full_h = y + (int)state.resource_scroll - scroll_top;
     if (full_h > scroll_h) {
         float ratio = (float)scroll_h / full_h;

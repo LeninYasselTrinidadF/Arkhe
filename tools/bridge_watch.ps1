@@ -40,6 +40,14 @@ $WorkspaceRoot = if ($env:VSCODE_CWD) { $env:VSCODE_CWD }
 
 $BridgePath = Join-Path $WorkspaceRoot $BridgeFile
 
+function Get-BuildDirs {
+    $outDir = Join-Path $WorkspaceRoot "out\build"
+    if (Test-Path $outDir) {
+        return Get-ChildItem $outDir -Directory | Select-Object -ExpandProperty FullName
+    }
+    return @()
+}
+
 function Write-Bridge($direction, $mode, $nodeCode, $nodeLabel, $texFile) {
     $ts = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
     $obj = [ordered]@{
@@ -51,6 +59,15 @@ function Write-Bridge($direction, $mode, $nodeCode, $nodeLabel, $texFile) {
         timestamp  = $ts
     }
     $obj | ConvertTo-Json -Depth 2 | Set-Content -Path $BridgePath -Encoding UTF8
+    
+    # Sincronizar con todas las carpetas de build detectadas
+    Get-BuildDirs | ForEach-Object {
+        $bp = Join-Path $_ $BridgeFile
+        try {
+            $obj | ConvertTo-Json -Depth 2 | Set-Content -Path $bp -Encoding UTF8
+        } catch {}
+    }
+    
     Write-Host "[bridge] Escrito: direction=$direction node=$nodeCode"
 }
 
@@ -65,13 +82,19 @@ function Read-Bridge {
 # → "Mathlib.Algebra.Group.Basic"
 # Si el archivo está en entries_index.json, usa ese mapeo inverso.
 function Resolve-NodeCode($texPath) {
-    # Intentar entries_index.json primero
-    $indexPath = Join-Path $WorkspaceRoot "assets\entries\entries_index.json"
-    if (Test-Path $indexPath) {
-        $idx = Get-Content $indexPath -Raw | ConvertFrom-Json
-        $filename = Split-Path $texPath -Leaf
-        foreach ($prop in $idx.PSObject.Properties) {
-            if ($prop.Value -eq $filename) { return $prop.Name }
+    # Intentar entries_index.json en root y luego en carpetas de build
+    $candidatePaths = @(Join-Path $WorkspaceRoot "assets\entries\entries_index.json")
+    Get-BuildDirs | ForEach-Object {
+        $candidatePaths += Join-Path $_ "assets\entries\entries_index.json"
+    }
+
+    foreach ($indexPath in $candidatePaths) {
+        if (Test-Path $indexPath) {
+            $idx = Get-Content $indexPath -Raw | ConvertFrom-Json
+            $filename = Split-Path $texPath -Leaf
+            foreach ($prop in $idx.PSObject.Properties) {
+                if ($prop.Value -eq $filename) { return $prop.Name }
+            }
         }
     }
     # Fallback: revertir safe_filename (reemplazar _ por .)

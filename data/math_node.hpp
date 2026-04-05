@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include "data/editor/section_data.hpp"
 
 enum class ViewMode  { MSC2020, Mathlib, Standard };
 enum class NodeLevel { Root, Macro, Section, Subsection, Topic };
@@ -34,6 +35,9 @@ struct MathNode {
     // Referencias cruzadas (inyectadas desde crossref.json)
     std::vector<std::string> msc_refs;       // ej: "34A12"
     std::vector<std::string> standard_refs;  // ej: "ODE.ExistenceUniqueness"
+
+    // Cross refs stored per-node from entry JSON (editor)
+    std::vector<struct EditorCrossRef> cross_refs;
 
     Texture2D latex_tex = {};
 };

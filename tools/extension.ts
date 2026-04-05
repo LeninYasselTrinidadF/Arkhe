@@ -111,23 +111,23 @@ async function sendToArkhe(uri?: vscode.Uri) {
         timestamp:  Math.floor(Date.now() / 1000)
     };
     
-    const payloadJson = JSON.stringify(payload, null, 2);
+        const payloadJson = JSON.stringify(payload, null, 2);
     try {
         console.log(`Escribiendo bridge en: ${bridgePath}`);
         fs.writeFileSync(bridgePath, payloadJson, 'utf8');
-        vscode.window.showInformationMessage(`Bridge escrito en: ${bridgePath}`);
         
-        // También escribir en CWD del binario (CMake) si existe, para cuando se corre desde Visual Studio
-        const debugDir = path.join(workspaceRoot, 'out', 'build', 'x64-debug');
-        if (fs.existsSync(debugDir)) {
-            console.log(`Escribiendo bridge en debugDir: ${debugDir}`);
-            fs.writeFileSync(path.join(debugDir, BRIDGE_RELATIVE), payloadJson, 'utf8');
+        // Escribir en todas las carpetas de salida de compilación detectadas
+        const buildDirs = getBuildDirectories(workspaceRoot);
+        for (const buildDir of buildDirs) {
+            const buildBridgePath = path.join(buildDir, BRIDGE_RELATIVE);
+            try {
+                fs.writeFileSync(buildBridgePath, payloadJson, 'utf8');
+                console.log(`Bridge sincronizado en: ${buildBridgePath}`);
+            } catch (e) {
+                console.warn(`No se pudo escribir en ${buildBridgePath}:`, e);
+            }
         }
-        
-        const releaseDir = path.join(workspaceRoot, 'out', 'build', 'x64-release');
-        if (fs.existsSync(releaseDir)) {
-            fs.writeFileSync(path.join(releaseDir, BRIDGE_RELATIVE), payloadJson, 'utf8');
-        }
+
         vscode.window.setStatusBarMessage(`$(check) Arkhe Bridge: ${nodeCode}`, 5000);
     } catch (err: any) {
         vscode.window.showErrorMessage(`Arkhe Bridge: no se pudo escribir el bridge.\n${err.message}`);
@@ -188,21 +188,39 @@ function getWorkspaceRoot(): string | null {
     return folders[0].uri.fsPath;
 }
 
+/**
+ * Escanea el directorio out/build para encontrar carpetas de configuración de CMake.
+ */
+function getBuildDirectories(workspaceRoot: string): string[] {
+    const outDir = path.join(workspaceRoot, 'out', 'build');
+    if (!fs.existsSync(outDir)) return [];
+    try {
+        return fs.readdirSync(outDir)
+            .map(d => path.join(outDir, d))
+            .filter(p => fs.existsSync(p) && fs.statSync(p).isDirectory());
+    } catch (_) {
+        return [];
+    }
+}
+
 // ── Gestión de Assets ─────────────────────────────────────────────────────────
 
 async function loadAssets(workspaceRoot: string) {
     if (cachedLayout && cachedIndex && lastWorkspaceRoot === workspaceRoot) return;
 
-    // Priorizar carpetas de salida de compilación
-    const buildAssets = path.join(workspaceRoot, 'out', 'build', 'x64-debug', 'assets');
-    const releaseAssets = path.join(workspaceRoot, 'out', 'build', 'x64-release', 'assets');
-    const rootAssets = path.join(workspaceRoot, 'assets');
+    // Priorizar carpetas de salida de compilación (detectar todas las configuraciones posibles de CMake)
+    const buildDirs = getBuildDirectories(workspaceRoot);
+    const candidateDirs = [
+        ...buildDirs.map(d => path.join(d, 'assets')),
+        path.join(workspaceRoot, 'assets')
+    ];
 
-    let assetDir = rootAssets;
-    if (fs.existsSync(path.join(buildAssets, 'mathlib_layout.json'))) {
-        assetDir = buildAssets;
-    } else if (fs.existsSync(path.join(releaseAssets, 'mathlib_layout.json'))) {
-        assetDir = releaseAssets;
+    let assetDir = path.join(workspaceRoot, 'assets');
+    for (const dir of candidateDirs) {
+        if (fs.existsSync(path.join(dir, 'mathlib_layout.json'))) {
+            assetDir = dir;
+            break;
+        }
     }
 
     const layoutPath = path.join(assetDir, 'mathlib_layout.json');

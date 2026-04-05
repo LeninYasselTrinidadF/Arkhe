@@ -1,6 +1,7 @@
 #include "ui/toolbar/entry_editor.hpp"
 #include "data/editor/editor_io.hpp"
 #include "ui/toolbar/editor_panel/editor_sections.hpp"
+#include "ui/key_controls/kbnav_toolbar/kbnav_toolbar.hpp"
 #include "ui/aesthetic/font_manager.hpp"
 #include "ui/constants.hpp"
 
@@ -13,7 +14,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 EntryEditor::EntryEditor(AppState& s) : PanelWidget(s) {
-    pos_x = -1;           // -1 → posicionar en el primer draw
+    pos_x = -1;
     pos_y = TOOLBAR_H;
     load_index();
 }
@@ -39,15 +40,10 @@ void EntryEditor::save_tex_file(MathNode* sel) {
     files_stale = true;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Callback estático para draw_body_section
-// ─────────────────────────────────────────────────────────────────────────────
-
-void EntryEditor::on_save_callback(MathNode* sel, EditState& edit,
-    AppState& state, bool& /*show_fm*/)
-{
-    (void)sel; (void)edit; (void)state;
-    // El cuerpo real está en el lambda capturado en draw().
+void EntryEditor::save_json(MathNode* sel) {
+    if (!sel) return;
+    editor_io::save_node_json(state, sel, edit);
+    edit.commit_snapshots(sel);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -57,50 +53,47 @@ void EntryEditor::on_save_callback(MathNode* sel, EditState& edit,
 void EntryEditor::draw(Vector2 mouse) {
     if (!state.toolbar.editor_open) return;
 
-    // ── Primera apertura: posicionar a la derecha ─────────────────────────────
+    kbnav_toolbar_begin_frame();
+
     if (pos_x == -1) {
         pos_x = std::max(0, SW() - 540 - 10);
         pos_y = TOOLBAR_H;
     }
 
     // ── Resolver nodo seleccionado ────────────────────────────────────────────
-    // Prioridad:
-    //   1. Hijo de cur cuyo code == selected_code  (clic en burbuja hija)
-    //   2. cur mismo si su code == selected_code   (clic en burbuja central)
-    //   3. cur mismo si selected_code está vacío   (push limpió la selección;
-    //      el usuario navegó dentro de un nodo → editar ese nodo directamente)
-    // El check != "ROOT" evita exponer el nodo raíz invisible.
     MathNode* cur = state.current();
     MathNode* sel = nullptr;
     if (cur) {
         for (auto& child : cur->children)
             if (child->code == state.selected_code) { sel = child.get(); break; }
-        if (!sel && cur->code == state.selected_code)
-            sel = cur;
-        if (!sel && cur->code != "ROOT")
-            sel = cur;
+        if (!sel && cur->code == state.selected_code) sel = cur;
+        if (!sel && cur->code != "ROOT")              sel = cur;
     }
 
-    // ── Sync: al cambiar nodo, leer body desde disco ──────────────────────────
+    // ── Sync al cambiar nodo ──────────────────────────────────────────────────
     if (sel && sel->code != edit.last_code) {
+        // Cargar .tex
         std::string body, fname;
         auto it = entries_index.find(sel->code);
         if (it != entries_index.end()) {
             fname = it->second;
-            body = editor_io::read_tex(state, fname);
+            body  = editor_io::read_tex(state, fname);
         }
-        edit.sync(sel, body, fname);
+        // Cargar JSON del nodo (actualiza sel->note/resources y edit.cross_refs)
+        editor_io::load_node_json(state, sel, edit);
+
+        edit.sync(sel, body, fname, edit.cross_refs, sel->resources.size());
         body_scroll = 0;
         files_stale = true;
         body_active = false;
     }
 
-    // ── Frame principal ───────────────────────────────────────────────────────
-    if (draw_window_frame(540, 560,
-        "EDITOR DE ENTRADAS", { 130,220,130,255 }, { 80,120,80,255 }, mouse))
+    // ── Frame del panel ───────────────────────────────────────────────────────
+    if (draw_window_frame(540, 620,
+        "EDITOR DE ENTRADAS", { 130, 220, 130, 255 }, { 80, 120, 80, 255 }, mouse))
     {
         state.toolbar.editor_open = false;
-        state.toolbar.active_tab = ToolbarTab::None;
+        state.toolbar.active_tab  = ToolbarTab::None;
         show_file_manager = false;
         return;
     }
@@ -111,46 +104,85 @@ void EntryEditor::draw(Vector2 mouse) {
 
     if (!sel) {
         DrawTextF("Selecciona una burbuja para editar.",
-            lx, y + 10, 12, { 120,120,160,200 });
+            lx, y + 10, 12, { 120, 120, 160, 200 });
         return;
     }
 
-    // ── Contenido del panel ───────────────────────────────────────────────────
-    editor_sections::draw_node_header(sel, lx, lw, y);
-
-    editor_sections::draw_node_fields(sel, edit, state, lx, lw, y, mouse);
-
-    DrawLine(lx, y, lx + lw, y, { 30,30,50,200 }); y += 8;
-
+    // ── Punteros estáticos para callbacks sin captura ─────────────────────────
     static EntryEditor* s_self = nullptr;
     s_self = this;
+
+    // Callback JSON (guarda todas las secciones JSON)
+    editor_sections::SaveFn json_save =
+        [](MathNode* s, EditState& /*e*/, AppState& /*st*/) {
+            if (s_self) s_self->save_json(s);
+        };
+
+    // Callback .tex (guarda el body_buf al disco)
+    auto tex_save = [](MathNode* /*s*/, EditState& /*e*/, AppState& /*st*/, bool& /*fm*/) {
+        if (s_self) s_self->save_tex_file(nullptr);  // sel se ignora; usa estado interno
+    };
+    // Versión correcta: captura sel mediante s_self
+    static MathNode* s_sel = nullptr;
+    s_sel = sel;
+    void (*tex_save_fn)(MathNode*, EditState&, AppState&, bool&) =
+        [](MathNode* s, EditState& /*e*/, AppState& /*st*/, bool& /*fm*/) {
+            if (s_self) s_self->save_tex_file(s_sel);
+        };
+
+    // ── Cabecera del nodo (siempre visible) ───────────────────────────────────
+    editor_sections::draw_node_header(sel, lx, lw, y);
+
+    // ── Sección 1: Basic Info ─────────────────────────────────────────────────
+    editor_sections::draw_basic_info_section(
+        sel, edit, state, lx, lw, y, mouse, json_save);
+
+    // ── Sección 2: Cuerpo LaTeX ───────────────────────────────────────────────
     editor_sections::draw_body_section(
         sel, edit, state, lx, lw, pos_y, ph, y, mouse,
         body_scroll, body_active, show_file_manager,
-        [](MathNode* s, EditState& e, AppState& st, bool& fm) {
-            if (s_self) s_self->save_tex_file(s);
-            (void)e; (void)st; (void)fm;
-        }
-    );
+        json_save, tex_save_fn);
 
-    DrawLine(lx, y, lx + lw, y, { 30,30,50,200 }); y += 8;
+    // ── Sección 3: Referencias Cruzadas ───────────────────────────────────────
+    // hint_codes: códigos de hijos del nodo actual para autocompletar
+    std::vector<std::string> hint_codes;
+    if (cur)
+        for (auto& ch : cur->children)
+            hint_codes.push_back(ch->code);
 
-    editor_sections::draw_resource_list(sel, lx, lw, pos_y, ph, y, mouse);
-    editor_sections::draw_add_resource_form(sel, edit, state, lx, lw, pos_y, ph, y, mouse);
+    editor_sections::draw_cross_refs_section(
+        sel, edit, state, lx, lw, pos_y, ph, y, mouse,
+        hint_codes, json_save);
 
-    // ── File manager (siempre encima, al final) ───────────────────────────────
+    // ── Sección 4: Recursos ───────────────────────────────────────────────────
+    editor_sections::draw_resources_section(
+        sel, edit, state, lx, lw, pos_y, ph, y, mouse, json_save);
+
+    // ── File manager ──────────────────────────────────────────────────────────
     if (show_file_manager && files_stale) {
-        tex_files = editor_io::list_tex_files(state);
+        tex_files   = editor_io::list_tex_files(state);
         files_stale = false;
     }
-
     editor_sections::draw_file_manager(
-        sel, edit, state,
-        pos_x, pos_y, mouse,
+        sel, edit, state, pos_x, pos_y, mouse,
         show_file_manager, tex_files,
-        file_list_scroll, files_stale,
-        entries_index
-    );
+        file_list_scroll, files_stale, entries_index);
+
+    // ── Procesar teclado ──────────────────────────────────────────────────────
+    kbnav_toolbar_handle(state, body_active);
+
+    {
+        int fi = kbnav_toolbar_focused_idx();
+        if (body_active && fi >= 0
+            && kbnav_toolbar_focused_kind() != ToolbarNavKind::Textarea)
+        {
+            body_active = false;
+            if (state.toolbar.active_field == -99)
+                state.toolbar.active_field = -1;
+        }
+    }
+
+    kbnav_toolbar_draw();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

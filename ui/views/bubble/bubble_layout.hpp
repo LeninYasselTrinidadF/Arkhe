@@ -8,6 +8,8 @@
 struct BubblePos {
     float x, y, r;   // posición centro y radio de dibujo
     int   node_idx;   // índice en cur->children
+    int   ring_idx;   // anillo al que pertenece (1 = más interior, 2, ...)
+    int   slot_idx;   // posición dentro del anillo (0-based, horario desde -90°)
 };
 
 // Calcula el layout sin superposición para los hijos de `cur`.

@@ -2,63 +2,96 @@
 #include "ui/key_controls/keyboard_nav.hpp"
 #include "ui/aesthetic/theme.hpp"
 #include "ui/aesthetic/font_manager.hpp"
-#include "data/search/loogle.hpp"   // loogle_search_async
+#include "data/search/loogle.hpp"
 #include "raylib.h"
+#include <algorithm>
+#include <cmath>
 #include <cstring>
 
+// ── Registro de ítems por frame ───────────────────────────────────────────────
+
+static constexpr int MAX_ITEMS = 64;
+
+struct SearchNavItem {
+    SearchNavKind kind;
+    Rectangle     rect;
+};
+
+static SearchNavItem s_items[MAX_ITEMS];
+static int           s_count        = 0;  // ítems registrados este frame
+static int           s_activated    = -1; // idx activado este frame (por handle)
+static int           s_prev_activated = -1; // idx activado el frame anterior (visible en draw)
+
+// ── API de registro ───────────────────────────────────────────────────────────
+
+void kbnav_search_begin_frame() {
+    s_prev_activated = s_activated;   // exponer activación del frame anterior
+    s_activated      = -1;
+    s_count          = 0;
+}
+
+int kbnav_search_register(SearchNavKind kind, Rectangle rect) {
+    if (s_count >= MAX_ITEMS) return s_count - 1;
+    int idx = s_count++;
+    s_items[idx] = { kind, rect };
+    return idx;
+}
+
+// ── API de consulta ───────────────────────────────────────────────────────────
+
+bool kbnav_search_is_focused(int idx) {
+    return idx >= 0 && g_kbnav.in(FocusZone::Search) && g_kbnav.search_idx == idx;
+}
+
+bool kbnav_search_is_activated(int idx) {
+    return idx >= 0 && s_prev_activated == idx;
+}
+
+bool kbnav_search_focused_is(SearchNavKind kind) {
+    if (!g_kbnav.in(FocusZone::Search)) return false;
+    int idx = g_kbnav.search_idx;
+    if (idx < 0 || idx >= s_count) return false;
+    return s_items[idx].kind == kind;
+}
+
 // ── kbnav_search_handle ───────────────────────────────────────────────────────
-//
-// Contrato de llamada:
-//   • Se invoca ANTES de draw_search_panel, una vez por frame.
-//   • Solo actúa cuando g_kbnav.in(FocusZone::Search) == true.
-//   • Escribe caracteres en state.search_buf o state.loogle_buf según sub-zona.
-//   • Enter en sub-zona 0 → no hace nada especial (búsqueda reactiva).
-//   • Enter en sub-zona 1 → lanza loogle_search_async.
-//   • Left/Right → cambia entre sub-zonas (espejo de up/down en toolbar).
+// Llamado al FINAL de search_panel::draw, cuando s_count ya es definitivo.
 
 bool kbnav_search_handle(AppState& state, const MathNode* /*search_root*/) {
     if (!g_kbnav.in(FocusZone::Search)) return false;
+    if (s_count == 0) return false;
+
+    // Clamp (los ítems pueden cambiar frame a frame)
+    g_kbnav.search_idx = std::clamp(g_kbnav.search_idx, 0, s_count - 1);
 
     bool consumed = false;
 
-    // ── Cambiar sub-zona con Left/Right (o Up/Down) ───────────────────────────
-    if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_UP)) {
-        g_kbnav.search_idx = (g_kbnav.search_idx - 1 + 2) % 2;
+    // ── Navegación Up/Down/Left/Right ─────────────────────────────────────────
+    bool go_prev = IsKeyPressed(KEY_UP)   || IsKeyPressed(KEY_LEFT);
+    bool go_next = IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_RIGHT);
+
+    if (go_prev) {
+        g_kbnav.search_idx = (g_kbnav.search_idx - 1 + s_count) % s_count;
         consumed = true;
     }
-    if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_DOWN)) {
-        g_kbnav.search_idx = (g_kbnav.search_idx + 1) % 2;
+    if (go_next) {
+        g_kbnav.search_idx = (g_kbnav.search_idx + 1) % s_count;
         consumed = true;
     }
 
-    // ── Escritura de caracteres en el buffer activo ───────────────────────────
-    char* buf  = (g_kbnav.search_idx == 0) ? state.search_buf  : state.loogle_buf;
-    int   cap  = 255;
-
-    // Caracteres imprimibles
-    int key = GetCharPressed();
-    while (key > 0) {
-        int len = (int)strlen(buf);
-        if (key >= 32 && key <= 125 && len < cap) {
-            buf[len] = (char)key;
-            buf[len + 1] = '\0';
-            consumed = true;
-        }
-        key = GetCharPressed();
-    }
-
-    // Borrar
-    if (IsKeyPressed(KEY_BACKSPACE)) {
-        int len = (int)strlen(buf);
-        if (len > 0) { buf[len - 1] = '\0'; consumed = true; }
-    }
-
-    // Enter
+    // ── Enter: activar ítem ───────────────────────────────────────────────────
     if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER)) {
-        if (g_kbnav.search_idx == 1 && strlen(state.loogle_buf) > 0) {
-            loogle_search_async(state, state.loogle_buf);
+        SearchNavKind k = s_items[g_kbnav.search_idx].kind;
+        switch (k) {
+        // Los campos de texto manejan su propio Enter (loogle_search_async, etc.)
+        // Solo activamos los ítems no-campo.
+        case SearchNavKind::LocalField:
+        case SearchNavKind::LoogleField:
+            break;
+        default:
+            s_activated = g_kbnav.search_idx;
+            break;
         }
-        // sub-zona 0: la búsqueda local es reactiva, no necesita acción extra.
         consumed = true;
     }
 
@@ -67,33 +100,56 @@ bool kbnav_search_handle(AppState& state, const MathNode* /*search_root*/) {
 
 // ── kbnav_search_draw ─────────────────────────────────────────────────────────
 
-void kbnav_search_draw(int px, int pw,
-                       int field_y_local,
-                       int field_y_loogle,
-                       int field_h,
-                       int btn_x, int btn_w)
-{
+static const char* kind_label(SearchNavKind k) {
+    switch (k) {
+    case SearchNavKind::LocalField:    return "Local";
+    case SearchNavKind::LocalButton:   return "Buscar";
+    case SearchNavKind::LocalResult:   return "Resultado";
+    case SearchNavKind::LocalPagerPrev:return "Anterior";
+    case SearchNavKind::LocalPagerNext:return "Siguiente";
+    case SearchNavKind::LoogleField:   return "Loogle";
+    case SearchNavKind::LoogleButton:  return "Buscar";
+    case SearchNavKind::LoogleResult:  return "Resultado";
+    case SearchNavKind::LooglePagerPrev:return "Anterior";
+    case SearchNavKind::LooglePagerNext:return "Siguiente";
+    }
+    return "";
+}
+
+void kbnav_search_draw() {
     if (!g_kbnav.in(FocusZone::Search)) return;
+    if (s_count == 0) return;
+
+    int idx = std::clamp(g_kbnav.search_idx, 0, s_count - 1);
+    const SearchNavItem& item = s_items[idx];
     const Theme& th = g_theme;
 
-    // Rectángulo que se resalta según sub-zona
-    Rectangle r;
-    if (g_kbnav.search_idx == 0) {
-        // Campo local
-        r = { (float)px, (float)field_y_local, (float)pw, (float)field_h };
-    } else {
-        // Campo + botón Loogle (ancho completo)
-        r = { (float)px, (float)field_y_loogle,
-              (float)(btn_x - px + btn_w), (float)field_h };
-    }
-
-    // Borde pulsante
-    float t     = (float)GetTime();
-    float alpha = 0.55f + 0.45f * sinf(t * 5.f);
-    DrawRectangleLinesEx(r, 2.f, ColorAlpha(th.accent, alpha));
-
-    // Segunda capa exterior (glow suave)
+    // ── Borde pulsante sobre el ítem activo ───────────────────────────────────
+    const float t     = (float)GetTime();
+    const float alpha = 0.55f + 0.45f * sinf(t * 5.f);
+    DrawRectangleLinesEx(item.rect, 2.f, ColorAlpha(th.accent, alpha));
     DrawRectangleLinesEx(
-        { r.x - 2.f, r.y - 2.f, r.width + 4.f, r.height + 4.f },
+        { item.rect.x - 2.f, item.rect.y - 2.f,
+          item.rect.width + 4.f, item.rect.height + 4.f },
         1.f, ColorAlpha(th.accent, alpha * 0.35f));
+
+    // ── Label flotante encima del borde superior ──────────────────────────────
+    const char* lbl  = kind_label(item.kind);
+    const int   lfs  = 9;
+    const int   lw   = MeasureTextF(lbl, lfs) + 10;
+    const int   lh   = lfs + 6;
+    Rectangle label_r = { item.rect.x, item.rect.y - (float)lh - 2.f,
+                           (float)lw,  (float)lh };
+    DrawRectangleRec(label_r, ColorAlpha(th.accent, 0.20f));
+    DrawRectangleLinesEx(label_r, 1.f, ColorAlpha(th.accent, 0.55f));
+    DrawTextF(lbl, (int)(label_r.x + 5), (int)(label_r.y + (lh - lfs) / 2),
+              lfs, th.accent);
+
+    // ── Hint de navegación ────────────────────────────────────────────────────
+    const char* hint = "\xE2\x86\x91\xE2\x86\x93 navegar";   // ↑↓
+    const int   hfs  = 9;
+    DrawTextF(hint,
+              (int)(item.rect.x + item.rect.width - MeasureTextF(hint, hfs)),
+              (int)(item.rect.y + item.rect.height + 3),
+              hfs, ColorAlpha(th.text_dim, 0.55f));
 }

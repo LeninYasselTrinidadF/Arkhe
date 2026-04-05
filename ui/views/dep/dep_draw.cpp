@@ -11,7 +11,7 @@ std::string dep_safe_trunc(const std::string& s, int max_chars) {
     if ((int)s.size() <= max_chars) return s;
     int cut = max_chars - 1;
     while (cut > 4 && s[cut] != ' ') cut--;
-    return s.substr(0, std::max(cut, max_chars - 1)) + "\xE2\x80\xA6"; // U+2026 UTF-8
+    return s.substr(0, std::max(cut, max_chars - 1)) + "\xE2\x80\xA6"; // U+2026
 }
 
 // ── dep_get_role ──────────────────────────────────────────────────────────────
@@ -33,47 +33,45 @@ NodeRole dep_get_role(const AppState& state, const std::string& id) {
 
 void dep_draw_edge(Vector2 from, Vector2 to,
     float w_from, float h_from,
-    float w_to, float h_to,
+    float w_to,   float h_to,
     Color col)
 {
     Vector2 dir = Vector2Normalize(Vector2Subtract(to, from));
     if (Vector2Length(dir) < 0.001f) return;
 
     Vector2 src = Vector2Add(from, Vector2Scale(dir, w_from * 0.5f + 2.f));
-    Vector2 dst = Vector2Subtract(to, Vector2Scale(dir, w_to * 0.5f + 6.f));
+    Vector2 dst = Vector2Subtract(to,   Vector2Scale(dir, w_to   * 0.5f + 6.f));
 
-    Vector2 perp = { -dir.y, dir.x };
+    Vector2 perp   = { -dir.y, dir.x };
     float   midlen = Vector2Length(Vector2Subtract(dst, src)) * 0.25f;
-    Vector2 ctrl1 = Vector2Add(src, Vector2Add(Vector2Scale(dir, midlen),
-        Vector2Scale(perp, midlen * 0.3f)));
-    Vector2 ctrl2 = Vector2Subtract(dst, Vector2Add(Vector2Scale(dir, midlen),
-        Vector2Scale(perp, midlen * 0.3f)));
+    Vector2 ctrl1  = Vector2Add(src, Vector2Add(
+        Vector2Scale(dir,  midlen), Vector2Scale(perp,  midlen * 0.3f)));
+    Vector2 ctrl2  = Vector2Subtract(dst, Vector2Add(
+        Vector2Scale(dir,  midlen), Vector2Scale(perp,  midlen * 0.3f)));
+
     const int SEG = 20;
     Vector2 prev = src;
     for (int k = 1; k <= SEG; k++) {
-        float   t = (float)k / SEG;
+        float   t  = (float)k / SEG;
         float   t2 = t * t, t3 = t2 * t;
-        float   u = 1.f - t, u2 = u * u, u3 = u2 * u;
+        float   u  = 1.f - t, u2 = u * u, u3 = u2 * u;
         Vector2 pt = {
-            u3 * src.x + 3 * u2 * t * ctrl1.x + 3 * u * t2 * ctrl2.x + t3 * dst.x,
-            u3 * src.y + 3 * u2 * t * ctrl1.y + 3 * u * t2 * ctrl2.y + t3 * dst.y
+            u3*src.x + 3*u2*t*ctrl1.x + 3*u*t2*ctrl2.x + t3*dst.x,
+            u3*src.y + 3*u2*t*ctrl1.y + 3*u*t2*ctrl2.y + t3*dst.y
         };
         DrawLineEx(prev, pt, 1.6f, col);
         prev = pt;
     }
 
-    // Punta de flecha — DrawTriangle requiere CCW en NDC (y-up OpenGL),
-    // pero BeginMode2D usa y-down, invirtiendo el winding aparente.
-    // Solución: DrawTriangleLines (sin winding) + relleno con líneas.
-    Vector2 adir = Vector2Normalize(Vector2Subtract(dst, ctrl2));
+    Vector2 adir  = Vector2Normalize(Vector2Subtract(dst, ctrl2));
     Vector2 aperp = { -adir.y * 6.f, adir.x * 6.f };
-    Vector2 tip = Vector2Add(dst, Vector2Scale(adir, 4.f));
-    Vector2 base_l = Vector2Add(Vector2Subtract(tip, Vector2Scale(adir, 12.f)), aperp);
+    Vector2 tip   = Vector2Add(dst, Vector2Scale(adir, 4.f));
+    Vector2 base_l = Vector2Add(Vector2Subtract(tip, Vector2Scale(adir, 12.f)),  aperp);
     Vector2 base_r = Vector2Subtract(Vector2Subtract(tip, Vector2Scale(adir, 12.f)), aperp);
 
-    DrawTriangleLines(tip, base_l, base_r, col);           // contorno, sin winding
-    DrawLineEx(tip, Vector2Lerp(base_l, base_r, 0.5f), 2.f, col); // eje central = relleno
-    DrawLineEx(base_l, base_r, 1.5f, col);                 // base del triángulo
+    DrawTriangleLines(tip, base_l, base_r, col);
+    DrawLineEx(tip, Vector2Lerp(base_l, base_r, 0.5f), 2.f, col);
+    DrawLineEx(base_l, base_r, 1.5f, col);
 }
 
 // ── dep_draw_node ─────────────────────────────────────────────────────────────
@@ -88,29 +86,30 @@ void dep_draw_node(const std::string& id, const NodePhys& p,
     Color bg, border, text_c;
     switch (role) {
     case NodeRole::Focus:
-        bg = th.accent;
+        bg     = th.accent;
         border = th.success;
         text_c = th.bg_app;
         break;
     case NodeRole::Upstream:
-        bg = hov ? th.ctrl_bg_hover : ColorAlpha(th.success, 0.18f);
+        bg     = hov ? th.ctrl_bg_hover : ColorAlpha(th.success, 0.18f);
         border = th.success;
         text_c = th.ctrl_text;
         break;
     case NodeRole::Downstream:
-        bg = hov ? th.ctrl_bg_hover : ColorAlpha(th.accent, 0.18f);
+        bg     = hov ? th.ctrl_bg_hover : ColorAlpha(th.accent, 0.18f);
         border = th.accent;
         text_c = th.ctrl_text;
         break;
     default:
-        bg = hov ? th.ctrl_bg_hover : ColorAlpha(th.ctrl_bg, 0.85f);
+        bg     = hov ? th.ctrl_bg_hover : ColorAlpha(th.ctrl_bg, 0.85f);
         border = hov ? th.bubble_hover_ring : th.ctrl_border;
         text_c = th.ctrl_text;
         break;
     }
 
     // Sombra
-    DrawRectangleRounded({ rect.x + 3.f, rect.y + 3.f, rect.width, rect.height },
+    DrawRectangleRounded(
+        { rect.x + 3.f, rect.y + 3.f, rect.width, rect.height },
         rnd / rect.height, 6, ColorAlpha(BLACK, 0.40f));
     // Fondo
     DrawRectangleRounded(rect, rnd / rect.height, 6, bg);
@@ -126,7 +125,7 @@ void dep_draw_node(const std::string& id, const NodePhys& p,
     }
 
     // Label
-    const DepNode* dn = get_dep_graph_for_const(state).get(id);
+    const DepNode* dn  = get_dep_graph_for_const(state).get(id);
     std::string    lbl = dn ? dep_safe_trunc(dn->label, 20) : dep_safe_trunc(id, 20);
     int tw = MeasureTextF(lbl.c_str(), 14);
     DrawTextF(lbl.c_str(), (int)(p.x - tw * 0.5f), (int)(p.y - 9), 14, text_c);
@@ -135,4 +134,78 @@ void dep_draw_node(const std::string& id, const NodePhys& p,
     int cw = MeasureTextF(id.c_str(), 10);
     DrawTextF(id.c_str(), (int)(p.x - cw * 0.5f), (int)(p.y + 6),
         10, ColorAlpha(text_c, 0.55f));
+}
+
+// ── dep_draw_pivot_node ───────────────────────────────────────────────────────
+// Anillo rojo pulsante doble alrededor del nodo pivote.
+
+void dep_draw_pivot_node(const NodePhys& p, const Theme& th) {
+    float t     = (float)GetTime();
+    float pulse = 1.f + 0.06f * sinf(t * 3.5f);
+    float pad   = 8.f * pulse;
+    float rnd   = 6.f;
+
+    // Color rojo vivo para el pivote
+    Color pivot_col       = { 220, 50,  50,  230 };
+    Color pivot_col_outer = { 220, 50,  50,  100 };
+
+    Rectangle inner = {
+        p.x - p.w * 0.5f - pad,
+        p.y - p.h * 0.5f - pad,
+        p.w + pad * 2.f,
+        p.h + pad * 2.f
+    };
+    Rectangle outer = {
+        inner.x - 3.f, inner.y - 3.f,
+        inner.width + 6.f, inner.height + 6.f
+    };
+
+    float corner_i = rnd / std::max(inner.height, 1.f);
+    float corner_o = rnd / std::max(outer.height, 1.f);
+
+    DrawRectangleRoundedLinesEx(inner, corner_i, 6, 2.2f, pivot_col);
+    DrawRectangleRoundedLinesEx(outer, corner_o, 6, 1.f,  pivot_col_outer);
+
+    // Pequeña etiqueta "PIVOTE" arriba del nodo
+    const char* lbl = "[ PIVOTE ]";
+    int lw = MeasureTextF(lbl, 10);
+    DrawTextF(lbl, (int)(p.x - lw * 0.5f),
+        (int)(p.y - p.h * 0.5f - pad - 14.f), 10, pivot_col);
+}
+
+// ── dep_draw_pivot_selector ───────────────────────────────────────────────────
+// Anillo azul-rojo pulsante alrededor del nodo seleccionado dentro del modo pivote.
+
+void dep_draw_pivot_selector(const NodePhys& p, const Theme& th) {
+    float t     = (float)GetTime();
+    float pulse = 1.f + 0.05f * sinf(t * 4.f);
+    float pad   = 6.f * pulse;
+    float rnd   = 6.f;
+
+    // Mezcla accent (azul) con un tinte rojo para distinguirlo del selector normal
+    Color sel_col       = { 180, 80,  200, 230 };  // púrpura (azul+rojo)
+    Color sel_col_outer = { 180, 80,  200, 100 };
+
+    Rectangle inner = {
+        p.x - p.w * 0.5f - pad,
+        p.y - p.h * 0.5f - pad,
+        p.w + pad * 2.f,
+        p.h + pad * 2.f
+    };
+    Rectangle outer = {
+        inner.x - 2.f, inner.y - 2.f,
+        inner.width + 4.f, inner.height + 4.f
+    };
+
+    float corner_i = rnd / std::max(inner.height, 1.f);
+    float corner_o = rnd / std::max(outer.height, 1.f);
+
+    DrawRectangleRoundedLinesEx(inner, corner_i, 6, 2.f,  sel_col);
+    DrawRectangleRoundedLinesEx(outer, corner_o, 6, 1.f,  sel_col_outer);
+
+    // Hint "Enter: re-pivotar"
+    const char* hint = "[ Enter: re-pivotar ]";
+    int hw = MeasureTextF(hint, 9);
+    DrawTextF(hint, (int)(p.x - hw * 0.5f),
+        (int)(p.y + p.h * 0.5f + pad + 2.f), 9, ColorAlpha(sel_col, 0.85f));
 }

@@ -1,5 +1,6 @@
 #include "ui/search_panel/local_search_list.hpp"
 #include "ui/search_panel/search_widgets.hpp"
+#include "ui/key_controls/kbnav_search/kbnav_search.hpp"
 #include "ui/aesthetic/font_manager.hpp"
 #include "ui/aesthetic/theme.hpp"
 #include "ui/key_controls/keyboard_nav.hpp"
@@ -32,15 +33,22 @@ void LocalSearchList::draw(AppState& state, const MathNode* search_root,
     search_draw_button("Buscar", (int)btn_r.x, (int)btn_r.y, btn_w, L.field_h, btn_hov);
     y += L.field_h + L.item_gap;
 
-    // ── Foco del campo ────────────────────────────────────────────────────────
+    // ── Registro kbnav: campo y botón ─────────────────────────────────────────
     Rectangle field_r = { (float)L.px, (float)field_y,
                            (float)(L.pw - btn_w - 4), (float)L.field_h };
-    if (panel_active && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+    const int field_idx = kbnav_search_register(SearchNavKind::LocalField,  field_r);
+    const int btn_idx   = kbnav_search_register(SearchNavKind::LocalButton, btn_r);
+
+    // ── Foco del campo ────────────────────────────────────────────────────────
+    if (panel_active && !g_kbnav.in(FocusZone::Search)
+        && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
         focus = CheckCollisionPointRec(mouse, field_r);
     if (g_kbnav.in(FocusZone::Search))
-        focus = (g_kbnav.search_idx == 0);
+        focus = kbnav_search_is_focused(field_idx);
+    if (!panel_active)
+        focus = false;
 
-    // ── Input de teclado ──────────────────────────────────────────────────────
+    // ── Input de teclado (solo cuando el campo tiene foco) ────────────────────
     if (focus) {
         int prev = (int)strlen(state.search_buf);
         int key  = GetCharPressed();
@@ -62,10 +70,10 @@ void LocalSearchList::draw(AppState& state, const MathNode* search_root,
         }
     }
 
-    // ── Botón "Buscar" → fuerza carga completa ────────────────────────────────
-    if (btn_hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)
-        && strlen(state.search_buf) > 0 && search_root)
-    {
+    // ── Botón "Buscar" (mouse o kbnav Enter) ──────────────────────────────────
+    const bool btn_activated = (btn_hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+                             || kbnav_search_is_activated(btn_idx);
+    if (btn_activated && strlen(state.search_buf) > 0 && search_root) {
         full_hits   = fuzzy_search(search_root, state.search_buf, LOCAL_FULL_MAX);
         full_loaded = true;
         page        = 0;
@@ -82,7 +90,6 @@ void LocalSearchList::draw(AppState& state, const MathNode* search_root,
     const int card_h = g_fonts.scale(L.ITEM_SZ) * 2 + L.lbl_gap * 3 + 4;
     const int stride = card_h + L.item_gap;
 
-    // Carga lazy de la primera página
     if (!full_loaded
         && (page_hits.empty() || last_query != std::string(state.search_buf)))
     {
@@ -121,17 +128,27 @@ void LocalSearchList::draw(AppState& state, const MathNode* search_root,
         int cy = list_top + i * stride - (int)scroll;
         if (cy + card_h < list_top) continue;
         if (cy > list_bot)          break;
+
         const auto& hit = all[page_start + i];
-        const bool  sel = (hit.node->code == state.selected_code);
-        const bool  hov = in_list && mouse.y > cy && mouse.y < cy + card_h;
-        search_draw_result_card(L.px, cy, L.pw, card_h, hov, sel);
+
+        // Registrar la tarjeta como ítem navegable
+        Rectangle card_r  = { (float)L.px, (float)cy, (float)L.pw, (float)card_h };
+        const int card_idx = kbnav_search_register(SearchNavKind::LocalResult, card_r);
+
+        const bool sel       = (hit.node->code == state.selected_code);
+        const bool hov       = in_list && mouse.y > cy && mouse.y < cy + card_h;
+        const bool kb_sel    = kbnav_search_is_focused(card_idx);
+        const bool activated = kbnav_search_is_activated(card_idx);
+
+        search_draw_result_card(L.px, cy, L.pw, card_h, hov, sel || kb_sel);
         DrawTextF(hit.node->code.c_str(), L.px + 6, cy + L.lbl_gap,
                   L.ITEM_SZ, th.text_code);
         std::string sl = hit.node->label.size() > 35
             ? hit.node->label.substr(0, 34) + "." : hit.node->label;
         DrawTextF(sl.c_str(), L.px + 6, cy + g_fonts.scale(L.ITEM_SZ) + L.lbl_gap * 2,
                   10, th_alpha(th.text_secondary));
-        if (hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+
+        if ((hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) || activated) {
             state.selected_code  = hit.node->code;
             state.selected_label = hit.node->label;
             if (!hit.node->children.empty()) state.push(hit.node);
@@ -140,8 +157,28 @@ void LocalSearchList::draw(AppState& state, const MathNode* search_root,
     EndScissorMode();
 
     // ── Paginador ─────────────────────────────────────────────────────────────
-    int new_pg = search_draw_pager(L.px, L.pw, list_bot + L.item_gap,
-                                   page, tot_pg, mouse, panel_active);
+    // Registrar los botones de página antes de dibujarlos para que kbnav los vea.
+    const int pager_y = list_bot + L.item_gap;
+    int prev_idx = -1, next_idx = -1;
+    if (tot_pg > 1) {
+        const int btn_sz  = g_fonts.scale(14) + g_fonts.scale(10);
+        char info[32]; snprintf(info, sizeof(info), "%d / %d", page + 1, tot_pg);
+        const int iw      = MeasureTextF(info, 11);
+        const int total_w = btn_sz * 2 + iw + g_fonts.scale(20);
+        const int bx      = L.px + (L.pw - total_w) / 2;
+        Rectangle pr = { (float)bx, (float)pager_y, (float)btn_sz, (float)btn_sz };
+        Rectangle nr = { (float)(bx + btn_sz + iw + g_fonts.scale(20)),
+                         (float)pager_y, (float)btn_sz, (float)btn_sz };
+        if (page > 0)            prev_idx = kbnav_search_register(SearchNavKind::LocalPagerPrev, pr);
+        if (page < tot_pg - 1)   next_idx = kbnav_search_register(SearchNavKind::LocalPagerNext, nr);
+    }
+
+    int new_pg = search_draw_pager(L.px, L.pw, pager_y, page, tot_pg, mouse, panel_active);
+
+    // Activación por kbnav
+    if (kbnav_search_is_activated(prev_idx)) new_pg = page - 1;
+    if (kbnav_search_is_activated(next_idx)) new_pg = page + 1;
+
     if (new_pg != page) {
         if (!full_loaded) {
             full_hits   = fuzzy_search(search_root, state.search_buf, LOCAL_FULL_MAX);
@@ -161,6 +198,6 @@ void LocalSearchList::draw(AppState& state, const MathNode* search_root,
                                 known_total, known_total == 1 ? "" : "s");
     DrawTextF(cnt,
               L.SB_X - MeasureTextF(cnt, 10) - 4,
-              list_bot + L.item_gap + (L.pager_h - g_fonts.scale(10)) / 2,
+              pager_y + (L.pager_h - g_fonts.scale(10)) / 2,
               10, th_alpha(th.text_dim));
 }

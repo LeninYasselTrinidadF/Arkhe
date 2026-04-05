@@ -2,11 +2,11 @@
 // ── entry_editor.hpp ──────────────────────────────────────────────────────────
 // Panel flotante para editar un MathNode seleccionado.
 //
-// La lógica se distribuye así:
-//   ui/editor/edit_state.hpp      → struct EditState (buffers + sync)
-//   ui/editor/editor_io.hpp/.cpp  → IO de archivos .tex y del índice JSON
-//   ui/editor/editor_sections.hpp/.cpp → secciones de dibujo reutilizables
-//   ui/panels/entry_editor.hpp/.cpp    → orquestación (esta clase)
+// Secciones (todas colapsables, con Guardar individual):
+//   · BASIC INFO       → note, texture_key, msc_refs  → <basename>.json
+//   · CUERPO LATEX     → body_buf                     → <basename>.tex + .json
+//   · REFERENCIAS      → cross_refs                   → <basename>.json
+//   · RECURSOS         → sel->resources               → <basename>.json
 // ─────────────────────────────────────────────────────────────────────────────
 
 #include "ui/widgets/panel_widget.hpp"
@@ -21,26 +21,23 @@ class EntryEditor : public PanelWidget {
     // ── Estado de edición ─────────────────────────────────────────────────────
     EditState edit;
 
-    // ── Índice persistente: code → filename.tex ───────────────────────────────
+    // ── Índice persistente: code → basename.tex ───────────────────────────────
     std::unordered_map<std::string, std::string> entries_index;
 
     // ── File manager ──────────────────────────────────────────────────────────
     std::vector<std::string> tex_files;
-    float file_list_scroll = 0.0f;
+    float file_list_scroll  = 0.f;
     bool  show_file_manager = false;
     bool  files_stale       = true;
 
     // ── Textarea ──────────────────────────────────────────────────────────────
-    float body_scroll = 0.0f;
+    float body_scroll = 0.f;
     bool  body_active = false;
 
-    // ── IO helpers (delegan en editor_io) ─────────────────────────────────────
+    // ── IO helpers ────────────────────────────────────────────────────────────
     void load_index();
-    void save_tex_file(MathNode* sel);   ///< Escribe body_buf al disco y actualiza índice.
-
-    // ── Callback de guardado para draw_body_section ───────────────────────────
-    static void on_save_callback(MathNode* sel, EditState& edit,
-                                 AppState& state, bool& show_fm);
+    void save_tex_file(MathNode* sel);   ///< Escribe body_buf al disco.
+    void save_json(MathNode* sel);       ///< Serializa todas las secciones JSON.
 
 public:
     explicit EntryEditor(AppState& s);

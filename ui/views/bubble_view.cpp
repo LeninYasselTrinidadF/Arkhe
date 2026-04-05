@@ -33,8 +33,8 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
 
     // ── Stats ─────────────────────────────────────────────────────────────────
     const MathNode* stats_root = nullptr;
-    if (state.mode == ViewMode::MSC2020 && state.msc_root)     stats_root = state.msc_root.get();
-    else if (state.mode == ViewMode::Mathlib && state.mathlib_root) stats_root = state.mathlib_root.get();
+    if (state.mode == ViewMode::MSC2020 && state.msc_root)          stats_root = state.msc_root.get();
+    else if (state.mode == ViewMode::Mathlib && state.mathlib_root)  stats_root = state.mathlib_root.get();
     else if (state.mode == ViewMode::Standard && state.standard_root)stats_root = state.standard_root.get();
     bubble_stats_ensure(stats_root, state.crossref_map, state.mode);
 
@@ -73,45 +73,107 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
     if (cur && !cur->children.empty())
         layout = compute_layout(cur, draw_radii, CENTER_R);
 
+    // Número de anillos presentes en este layout
+    int num_rings = 0;
+    for (auto& bp : layout)
+        num_rings = std::max(num_rings, bp.ring_idx);
+
     // ── Nivel hoja (Mathlib) ──────────────────────────────────────────────────
     bool at_leaf_level = state.mode == ViewMode::Mathlib
         && cur && cur->code != "ROOT"
         && !cur->children.empty()
         && cur->children[0]->children.empty();
 
-    // ── Teclado: selector de canvas (zona Canvas, modo burbujas) ─────────────
+    // ── Teclado: navegación por anillos (zona Canvas, modo burbujas) ──────────
     if (g_kbnav.in(FocusZone::Canvas) && !state.dep_view_active && cur) {
-        int n = (int)cur->children.size();
-        // Clamp por si el árbol cambió
-        if (g_kbnav.canvas_idx > n) g_kbnav.canvas_idx = 0;
+        const int n = (int)cur->children.size();
 
-        // Left / Up → anterior   (idx 0 = centro, 1..n = hijos)
-        if (IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_UP)) {
-            g_kbnav.canvas_idx = (g_kbnav.canvas_idx - 1 + n + 1) % (n + 1);
-        }
-        // Right / Down → siguiente
-        if (IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_DOWN)) {
-            g_kbnav.canvas_idx = (g_kbnav.canvas_idx + 1) % (n + 1);
+        // Clamp de seguridad por si el árbol cambió
+        if (g_kbnav.ring_idx > num_rings) {
+            g_kbnav.ring_idx = (num_rings > 0) ? 1 : 0;
+            g_kbnav.slot_idx = 0;
         }
 
-        // Enter → activar elemento seleccionado
-        if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER)) {
-            if (g_kbnav.canvas_idx == 0) {
-                // Centro: seleccionar si es leaf-level, o retroceder
-                if (at_leaf_level) {
-                    state.selected_code = cur->code;
-                    state.selected_label = cur->label;
+        // Cuenta cuántos slots tiene el anillo actual
+        auto slots_in_ring = [&](int ri) -> int {
+            int count = 0;
+            for (auto& bp : layout)
+                if (bp.ring_idx == ri) count++;
+            return count;
+            };
+
+        // ── Arriba / Abajo: moverse dentro del anillo (anti-horario / horario) ──
+        // No aplica cuando estamos en el centro (ring_idx == 0)
+        if (g_kbnav.ring_idx > 0) {
+            int slots = slots_in_ring(g_kbnav.ring_idx);
+            if (slots > 0) {
+                if (IsKeyPressed(KEY_UP)) {
+                    g_kbnav.slot_idx = (g_kbnav.slot_idx - 1 + slots) % slots;
                 }
-                else if (state.can_go_back()) {
-                    state.save_cam(cam);
-                    state.pop();
-                    g_kbnav.canvas_idx = 0;
+                if (IsKeyPressed(KEY_DOWN)) {
+                    g_kbnav.slot_idx = (g_kbnav.slot_idx + 1) % slots;
                 }
             }
+        }
+
+        // ── Derecha: anillo exterior ───────────────────────────────────────────
+        if (IsKeyPressed(KEY_RIGHT)) {
+            if (g_kbnav.ring_idx == 0) {
+                // Centro → anillo 1
+                if (num_rings >= 1) {
+                    g_kbnav.ring_idx = 1;
+                    g_kbnav.slot_idx = 0;
+                }
+            }
+            else if (g_kbnav.ring_idx < num_rings) {
+                // Anillo N → anillo N+1; conservar slot_idx (clamp si necesario)
+                g_kbnav.ring_idx++;
+                int slots = slots_in_ring(g_kbnav.ring_idx);
+                if (g_kbnav.slot_idx >= slots) g_kbnav.slot_idx = 0;
+            }
+            // Si ya estamos en el último anillo, no hace nada
+        }
+
+        // ── Izquierda: anillo interior ─────────────────────────────────────────
+        if (IsKeyPressed(KEY_LEFT)) {
+            if (g_kbnav.ring_idx == 0) {
+                // Centro → anillo 1 (cualquier dirección desde centro va a anillo 1)
+                if (num_rings >= 1) {
+                    g_kbnav.ring_idx = 1;
+                    g_kbnav.slot_idx = 0;
+                }
+            }
+            else if (g_kbnav.ring_idx == 1) {
+                // Anillo 1 → centro
+                g_kbnav.ring_idx = 0;
+                g_kbnav.slot_idx = 0;
+            }
             else {
-                int ci = g_kbnav.canvas_idx - 1;
-                if (ci < n) {
-                    auto& child = cur->children[ci];
+                // Anillo N → anillo N-1; conservar slot_idx (clamp si necesario)
+                g_kbnav.ring_idx--;
+                int slots = slots_in_ring(g_kbnav.ring_idx);
+                if (g_kbnav.slot_idx >= slots) g_kbnav.slot_idx = 0;
+            }
+        }
+
+        // ── Enter: activar elemento seleccionado ───────────────────────────────
+        if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER)) {
+            if (g_kbnav.ring_idx == 0) {
+                // Centro: no hace nada (ya estamos aquí)
+                // (Si quisieras pop, sería aquí, pero la spec dice "no cambia nada")
+            }
+            else {
+                // Buscar el BubblePos con ring_idx y slot_idx actuales
+                const BubblePos* sel = nullptr;
+                for (auto& bp : layout) {
+                    if (bp.ring_idx == g_kbnav.ring_idx
+                        && bp.slot_idx == g_kbnav.slot_idx) {
+                        sel = &bp;
+                        break;
+                    }
+                }
+                if (sel && sel->node_idx < n) {
+                    auto& child = cur->children[sel->node_idx];
                     // Código completo para hojas Mathlib
                     if (state.mode == ViewMode::Mathlib
                         && child->children.empty()
@@ -126,7 +188,8 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
                     state.selected_label = child->label;
                     if (!child->children.empty()) {
                         state.push(child);
-                        g_kbnav.canvas_idx = 0;
+                        g_kbnav.ring_idx = 0;
+                        g_kbnav.slot_idx = 0;
                     }
                 }
             }
@@ -178,11 +241,10 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
     BeginScissorMode(0, UI_TOP(), CANVAS_W(), TOP_H());
     BeginMode2D(cam);
 
-    // Líneas de conexión (usan temp_positions si el nodo fue movido manualmente)
+    // Líneas de conexión
     if (cur && !cur->children.empty()) {
         for (int i = 0; i < (int)layout.size(); i++) {
             const auto& child = cur->children[i];
-            // Usar posición desplazada si existe, igual que al dibujar la burbuja
             float lx = layout[i].x, ly = layout[i].y;
             auto tp_line = state.temp_positions.find(
                 state.cam_key_for(state.mode, child->code));
@@ -211,12 +273,9 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
     if (cur && cur->code != "ROOT" && !cur->children.empty()) {
         const BubbleStats& cs = bubble_stats_get(cur->code);
 
-        // ── Arco verde: fracción de hijos directos con crossref ───────────────
         draw_progress_arc(0.0f, 0.0f, CENTER_R, cs.progress, 5.0f,
             arc_color(state.mode, cs.progress));
 
-        // ── Arco rojo: cobertura de hojas totales del subárbol ────────────────
-        // Pondera por peso (número de hojas) en lugar de contar hijos directos.
         {
             int total_w = 0, connected_w = 0;
             for (auto& child : cur->children) {
@@ -233,15 +292,13 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
             }
         }
 
-        // ── Arco naranja: fracción de hijos con entradas en el grafo dep ──────
         {
             const DepGraph& dg = get_dep_graph_for_const(state);
             if (!dg.empty()) {
                 int total_c = (int)cur->children.size(), dep_c = 0;
                 for (auto& child : cur->children) {
                     const DepNode* dn = dg.find_best(child->code);
-                    if (dn && !dg.get_dependents(dn->id).empty())
-                        dep_c++;
+                    if (dn && !dg.get_dependents(dn->id).empty()) dep_c++;
                 }
                 float dep_progress = (total_c > 0)
                     ? (float)dep_c / (float)total_c : 0.0f;
@@ -255,7 +312,7 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
     }
 
     // ── Selector teclado: burbuja central ─────────────────────────────────────
-    if (g_kbnav.in(FocusZone::Canvas) && g_kbnav.canvas_idx == 0 && !state.dep_view_active) {
+    if (g_kbnav.in(FocusZone::Canvas) && g_kbnav.ring_idx == 0 && !state.dep_view_active) {
         float t = (float)GetTime();
         float pulse = 1.f + 0.07f * sinf(t * 4.f);
         DrawCircleLinesV({ 0.f, 0.f }, (CENTER_R + 10.f) * pulse,
@@ -349,16 +406,21 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
                 }
             }
 
-            // ── Selector teclado: burbuja hija i ─────────────────────────────
-            if (g_kbnav.in(FocusZone::Canvas) && g_kbnav.canvas_idx == i + 1
-                && !state.dep_view_active) {
+            // ── Selector teclado: burbuja hija ────────────────────────────────
+            // La burbuja está seleccionada si su ring_idx y slot_idx coinciden
+            // con el estado actual del navegador.
+            bool kb_selected = g_kbnav.in(FocusZone::Canvas)
+                && !state.dep_view_active
+                && g_kbnav.ring_idx == layout[i].ring_idx
+                && g_kbnav.slot_idx == layout[i].slot_idx;
+
+            if (kb_selected) {
                 float t = (float)GetTime();
                 float pulse = 1.f + 0.07f * sinf(t * 4.f);
                 DrawCircleLinesV({ bx, by }, (draw_r + 10.f) * pulse,
                     ColorAlpha(th.accent, 0.85f));
                 DrawCircleLinesV({ bx, by }, (draw_r + 5.f) * pulse,
                     ColorAlpha(th.accent, 0.35f));
-                // Mini hint debajo
                 const char* hint = child->children.empty()
                     ? "[ Enter: seleccionar ]" : "[ Enter: entrar ]";
                 int hw = MeasureTextF(hint, 9);
@@ -384,7 +446,7 @@ void draw_bubble_view(AppState& state, Camera2D& cam, Vector2 mouse) {
             int total_h = (int)draw_lines.size() * line_h
                 + ((int)draw_lines.size() - 1) * line_gap;
             bool has_tex = !child->texture_key.empty();
-            int base_y = has_tex ? (int)(by + draw_r * 0.55f) : (int)(by - total_h / 2);
+            int  base_y = has_tex ? (int)(by + draw_r * 0.55f) : (int)(by - total_h / 2);
 
             for (int li = 0; li < (int)draw_lines.size(); li++) {
                 int tw = MeasureTextF(draw_lines[li].c_str(), LBL_FONT);

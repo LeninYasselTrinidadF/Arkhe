@@ -4,29 +4,46 @@
 #include "ui/key_controls/keyboard_nav.hpp"
 #include "raylib.h"
 
-// ── KbSearchState ─────────────────────────────────────────────────────────────
-// Estado interno de la zona Search para navegación por teclado.
-// El ciclo Tab cambia entre las dos sub-zonas:
-//   search_idx == 0  → campo "Local (fuzzy)"
-//   search_idx == 1  → campo "Loogle"
-//
-// Dentro de cada sub-zona:
-//   Up/Down  → no aplica en el campo de texto; se reserva para futura lista.
-//   Enter    → ejecutar búsqueda correspondiente.
-//
-// El módulo expone dos funciones:
-//   kbnav_search_handle  – llama UNA VEZ por frame, ANTES de draw_search_panel.
-//   kbnav_search_draw    – dibuja el indicador de foco activo (llamar DESPUÉS).
+// ── SearchNavKind ─────────────────────────────────────────────────────────────
+// Tipos de ítem interactivo dentro del panel de búsqueda.
+// Se registran en orden visual (top → bottom) durante cada draw().
+// ─────────────────────────────────────────────────────────────────────────────
 
-// Procesa teclado para la zona Search.
-// Devuelve true si alguna tecla fue consumida.
+enum class SearchNavKind : uint8_t {
+    LocalField,
+    LocalButton,
+    LocalResult,
+    LocalPagerPrev,
+    LocalPagerNext,
+    LoogleField,
+    LoogleButton,
+    LoogleResult,
+    LooglePagerPrev,
+    LooglePagerNext,
+};
+
+// ── API de registro ───────────────────────────────────────────────────────────
+// Llamar al inicio de SearchPanel::draw() antes de los sub-componentes.
+void kbnav_search_begin_frame();
+
+// Registrar un ítem interactivo tal como se dibuja. Devuelve su índice.
+int  kbnav_search_register(SearchNavKind kind, Rectangle rect);
+
+// ── API de consulta (durante draw de sub-componentes) ─────────────────────────
+
+// True si el ítem en idx tiene el foco teclado este frame.
+bool kbnav_search_is_focused(int idx);
+
+// True si el ítem en idx fue activado (Enter) el frame anterior.
+bool kbnav_search_is_activated(int idx);
+
+// True si el ítem actualmente enfocado es del tipo dado.
+// Usar para decidir si un campo de texto acepta input.
+bool kbnav_search_focused_is(SearchNavKind kind);
+
+// ── Procesamiento y dibujo ────────────────────────────────────────────────────
+// Llamar al FINAL de SearchPanel::draw() tras registrar todos los ítems.
 bool kbnav_search_handle(AppState& state, const MathNode* search_root);
 
-// Dibuja el borde de foco sobre el campo/botón activo.
-// px, pw, field_y_local, field_y_loogle, field_h: geometría idéntica a draw_search_panel.
-// btn_x, btn_w: posición del botón "Buscar" de Loogle.
-void kbnav_search_draw(int px, int pw,
-                       int field_y_local,
-                       int field_y_loogle,
-                       int field_h,
-                       int btn_x, int btn_w);
+// Dibujar indicador encima de todo (llamar tras handle).
+void kbnav_search_draw();

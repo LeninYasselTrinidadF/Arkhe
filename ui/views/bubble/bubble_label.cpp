@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <sstream>
+#include <unordered_map>
 #include <unordered_set>
 
 // ── split_camel ───────────────────────────────────────────────────────────────

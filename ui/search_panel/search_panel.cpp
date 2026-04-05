@@ -1,6 +1,7 @@
 #include "ui/search_panel/search_panel.hpp"
 #include "ui/search_panel/search_widgets.hpp"
 #include "ui/search_panel/search_layout.hpp"
+#include "ui/key_controls/kbnav_search/kbnav_search.hpp"
 #include "ui/aesthetic/font_manager.hpp"
 #include "ui/aesthetic/overlay.hpp"
 #include "ui/aesthetic/skin.hpp"
@@ -14,7 +15,11 @@ SearchPanel search_panel;
 void SearchPanel::draw(AppState& state, const MathNode* search_root, Vector2 mouse) {
     const Theme& th = g_theme;
 
-    // ── Layout (calculado una vez por frame) ──────────────────────────────────
+    // ── Limpiar registro de ítems del frame anterior ──────────────────────────
+    // Debe llamarse ANTES de los sub-componentes para que registren sus ítems frescos.
+    kbnav_search_begin_frame();
+
+    // ── Layout ────────────────────────────────────────────────────────────────
     constexpr int SB_W = 7;
     SearchLayout L;
     L.px       = CANVAS_W() + 10;
@@ -39,18 +44,22 @@ void SearchPanel::draw(AppState& state, const MathNode* search_root, Vector2 mou
     const bool panel_active = panel_hover || g_kbnav.in(FocusZone::Search);
 
     // ── Cabecera ──────────────────────────────────────────────────────────────
-    int y = panel_top;
-    DrawTextF("BUSQUEDA", L.px, y + L.lbl_gap + 2, 13, th_alpha(th.text_dim));
-    const int div1 = y + g_fonts.scale(13) + L.lbl_gap * 2 + 4;
+    DrawTextF("BUSQUEDA", L.px, panel_top + L.lbl_gap + 2, 13, th_alpha(th.text_dim));
+    const int div1 = panel_top + g_fonts.scale(13) + L.lbl_gap * 2 + 4;
     search_draw_divider_h(div1);
 
-    // ── Mitad local (campo + lista) ───────────────────────────────────────────
+    // ── Sub-componentes (registran sus ítems durante el draw) ─────────────────
     const int half_y = panel_top + TOP_H() / 2;
     local_list.draw(state, search_root, L, panel_active, mouse,
                     div1 + L.lbl_gap + 4, half_y);
 
-    // ── Divisor central + sección Loogle ─────────────────────────────────────
     search_draw_divider_h(half_y);
     loogle_list.draw(state, L, panel_active, mouse,
                      half_y + L.lbl_gap + 4, panel_top + TOP_H());
+
+    // ── Procesar navegación teclado (DESPUÉS de registrar todos los ítems) ────
+    kbnav_search_handle(state, search_root);
+
+    // ── Dibujar indicador encima de todo ──────────────────────────────────────
+    kbnav_search_draw();
 }

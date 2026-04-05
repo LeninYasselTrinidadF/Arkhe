@@ -61,7 +61,11 @@ add_executable(Arkhe
     ui/toolbar/docs_panel.cpp
     ui/toolbar/entry_editor.cpp
     ui/toolbar/ubicaciones_panel.cpp
-    ui/toolbar/editor_panel/editor_sections.cpp
+    ui/toolbar/editor_panel/editor_body.cpp
+    ui/toolbar/editor_panel/editor_cross_refs.cpp
+    ui/toolbar/editor_panel/editor_file_manager.cpp
+    ui/toolbar/editor_panel/editor_header_fields.cpp
+    ui/toolbar/editor_panel/editor_resources.cpp
 
     # ui/search_panel
     ui/search_panel/search_panel.cpp
@@ -88,11 +92,14 @@ add_executable(Arkhe
 
     # ui/key_controls
     ui/key_controls/keyboard_nav.cpp
+    ui/key_controls/kbnav_views/kbnav_views.cpp
     ui/key_controls/kbnav_info/kbnav_info.cpp
+    ui/key_controls/kbnav_toolbar/kbnav_toolbar.cpp
     ui/key_controls/kbnav_search/kbnav_search.cpp
 
     # ui/views/dep
     ui/views/dep/dep_draw.cpp
+    ui/views/dep/dep_pivot.cpp
     ui/views/dep/dep_sim.cpp
 
     # ui/views

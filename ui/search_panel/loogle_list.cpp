@@ -1,5 +1,6 @@
 #include "ui/search_panel/loogle_list.hpp"
 #include "ui/search_panel/search_widgets.hpp"
+#include "ui/key_controls/kbnav_search/kbnav_search.hpp"
 #include "data/search/loogle.hpp"
 #include "data/search/search_utils.hpp"
 #include "ui/aesthetic/font_manager.hpp"
@@ -32,13 +33,20 @@ void LoogleList::draw(AppState& state, const SearchLayout& L,
     bool btn_hov     = panel_active && CheckCollisionPointRec(mouse, btn_r);
     search_draw_button("Buscar", (int)btn_r.x, (int)btn_r.y, btn_w, L.field_h, btn_hov);
 
-    // ── Foco del campo ────────────────────────────────────────────────────────
+    // ── Registro kbnav: campo y botón ─────────────────────────────────────────
     Rectangle field_r = { (float)L.px, (float)field_y,
                            (float)(L.pw - btn_w - 4), (float)L.field_h };
-    if (panel_active && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+    const int field_idx = kbnav_search_register(SearchNavKind::LoogleField,  field_r);
+    const int btn_idx   = kbnav_search_register(SearchNavKind::LoogleButton, btn_r);
+
+    // ── Foco del campo ────────────────────────────────────────────────────────
+    if (panel_active && !g_kbnav.in(FocusZone::Search)
+        && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
         focus = CheckCollisionPointRec(mouse, field_r);
     if (g_kbnav.in(FocusZone::Search))
-        focus = (g_kbnav.search_idx == 1);
+        focus = kbnav_search_is_focused(field_idx);
+    if (!panel_active)
+        focus = false;
 
     // ── Input de teclado ──────────────────────────────────────────────────────
     if (focus) {
@@ -63,10 +71,10 @@ void LoogleList::draw(AppState& state, const SearchLayout& L,
         }
     }
 
-    // ── Botón "Buscar" ────────────────────────────────────────────────────────
-    if (btn_hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)
-        && strlen(state.loogle_buf) > 0)
-    {
+    // ── Botón "Buscar" (mouse o kbnav Enter) ──────────────────────────────────
+    const bool btn_activated = (btn_hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+                             || kbnav_search_is_activated(btn_idx);
+    if (btn_activated && strlen(state.loogle_buf) > 0) {
         loogle_search_async(state, state.loogle_buf);
         loogle_page = 0; loogle_scroll = 0.f;
     }
@@ -119,8 +127,15 @@ void LoogleList::draw(AppState& state, const SearchLayout& L,
         if (cy > ll_bot)           break;
 
         const auto& r   = state.loogle_results[page_start + i];
-        const bool  hov = in_list && mouse.y > cy && mouse.y < cy + lcard_h;
-        search_draw_result_card(L.px, cy, L.pw, lcard_h, hov, false);
+
+        Rectangle card_r  = { (float)L.px, (float)cy, (float)L.pw, (float)lcard_h };
+        const int card_idx = kbnav_search_register(SearchNavKind::LoogleResult, card_r);
+
+        const bool hov       = in_list && mouse.y > cy && mouse.y < cy + lcard_h;
+        const bool kb_sel    = kbnav_search_is_focused(card_idx);
+        const bool activated = kbnav_search_is_activated(card_idx);
+
+        search_draw_result_card(L.px, cy, L.pw, lcard_h, hov || kb_sel, false);
 
         std::string name = r.name.size()     > 38 ? r.name.substr(0, 37)     + "." : r.name;
         std::string mod  = r.module.size()   > 44 ? r.module.substr(0, 43)   + "." : r.module;
@@ -133,7 +148,7 @@ void LoogleList::draw(AppState& state, const SearchLayout& L,
                   cy + g_fonts.scale(12) + g_fonts.scale(10) + L.lbl_gap * 3,
                   10, th_alpha(th.text_dim));
 
-        if (hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        auto activate_result = [&]() {
             auto found = find_node_by_module(state.mathlib_root, r.module);
             if (found) {
                 std::shared_ptr<MathNode> decl;
@@ -150,13 +165,34 @@ void LoogleList::draw(AppState& state, const SearchLayout& L,
             } else {
                 OpenURL(("https://loogle.lean-lang.org/?q=" + r.name).c_str());
             }
-        }
+        };
+
+        if ((hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) || activated)
+            activate_result();
     }
     EndScissorMode();
 
     // ── Paginador ─────────────────────────────────────────────────────────────
-    int new_lp = search_draw_pager(L.px, L.pw, ll_bot + L.item_gap,
-                                   loogle_page, tot_pg, mouse, panel_active);
+    const int pager_y = ll_bot + L.item_gap;
+    int prev_idx = -1, next_idx = -1;
+    if (tot_pg > 1) {
+        const int btn_sz  = g_fonts.scale(14) + g_fonts.scale(10);
+        char info[32]; snprintf(info, sizeof(info), "%d / %d", loogle_page + 1, tot_pg);
+        const int iw      = MeasureTextF(info, 11);
+        const int total_w = btn_sz * 2 + iw + g_fonts.scale(20);
+        const int bx      = L.px + (L.pw - total_w) / 2;
+        Rectangle pr = { (float)bx, (float)pager_y, (float)btn_sz, (float)btn_sz };
+        Rectangle nr = { (float)(bx + btn_sz + iw + g_fonts.scale(20)),
+                         (float)pager_y, (float)btn_sz, (float)btn_sz };
+        if (loogle_page > 0)           prev_idx = kbnav_search_register(SearchNavKind::LooglePagerPrev, pr);
+        if (loogle_page < tot_pg - 1)  next_idx = kbnav_search_register(SearchNavKind::LooglePagerNext, nr);
+    }
+
+    int new_lp = search_draw_pager(L.px, L.pw, pager_y, loogle_page, tot_pg, mouse, panel_active);
+
+    if (kbnav_search_is_activated(prev_idx)) new_lp = loogle_page - 1;
+    if (kbnav_search_is_activated(next_idx)) new_lp = loogle_page + 1;
+
     if (new_lp != loogle_page) {
         loogle_page   = new_lp;
         loogle_scroll = 0.f;
@@ -167,6 +203,6 @@ void LoogleList::draw(AppState& state, const SearchLayout& L,
     snprintf(cnt, sizeof(cnt), "%d resultado%s", total, total == 1 ? "" : "s");
     DrawTextF(cnt,
               L.SB_X - MeasureTextF(cnt, 10) - 4,
-              ll_bot + L.item_gap + (L.pager_h - g_fonts.scale(10)) / 2,
+              pager_y + (L.pager_h - g_fonts.scale(10)) / 2,
               10, th_alpha(th.text_dim));
 }
