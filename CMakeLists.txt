@@ -54,6 +54,7 @@ add_executable(Arkhe
     ui/info/info_header.cpp
     ui/info/info_panel.cpp
     ui/info/info_resources.cpp
+    ui/info/info_text_select.cpp
 
     # ui/toolbar
     ui/toolbar/toolbar.cpp

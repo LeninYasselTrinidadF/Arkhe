@@ -43,7 +43,7 @@ void kbnav_info_register_render(Rectangle r) {
 void kbnav_info_register_resource(Rectangle r, const std::string& url_or_code,
     bool is_web_link) {
     InfoItemKind k = is_web_link ? InfoItemKind::ResourceLink
-        : InfoItemKind::CrossrefCard;
+                                 : InfoItemKind::CrossrefCard;
     g_kbinfo.push({ k, r, url_or_code });
 }
 
@@ -55,12 +55,12 @@ void kbnav_info_register_crossref(Rectangle r, const std::string& code,
 // ── kbnav_info_handle ─────────────────────────────────────────────────────────
 
 bool kbnav_info_handle(AppState& state, int split_y_min, int split_y_max,
-    int& g_split_y) {
+    int& g_split_y)
+{
     if (!g_kbnav.in(FocusZone::Info)) return false;
 
-    // Paneles modales del toolbar absorben todo el teclado
     if (state.toolbar.ubicaciones_open || state.toolbar.docs_open
-        || state.toolbar.editor_open || state.toolbar.config_open)
+        || state.toolbar.editor_open   || state.toolbar.config_open)
         return false;
 
     bool consumed = false;
@@ -68,14 +68,8 @@ bool kbnav_info_handle(AppState& state, int split_y_min, int split_y_max,
 
     // ── Espacio: expandir / contraer info_panel ───────────────────────────────
     if (IsKeyPressed(KEY_SPACE)) {
-        if (!g_kbinfo.expanded) {
-            // Expandir al máximo (panel al mínimo posible)
-            g_split_y = split_y_min;
-        }
-        else {
-            // Volver a posición media heurística
-            g_split_y = (split_y_min + split_y_max) / 2;
-        }
+        g_split_y = g_kbinfo.expanded ? (split_y_min + split_y_max) / 2
+                                      : split_y_min;
         g_kbinfo.expanded = !g_kbinfo.expanded;
         consumed = true;
     }
@@ -91,7 +85,6 @@ bool kbnav_info_handle(AppState& state, int split_y_min, int split_y_max,
             consumed = true;
         }
 
-        // Clamp por si los ítems cambiaron de frame
         g_kbnav.info_idx = std::clamp(g_kbnav.info_idx, 0, n - 1);
 
         // ── Enter: activar ítem ───────────────────────────────────────────────
@@ -101,31 +94,11 @@ bool kbnav_info_handle(AppState& state, int split_y_min, int split_y_max,
                 switch (it->kind) {
 
                 case InfoItemKind::RenderButton:
-                    // El render lo lanza info_description; aquí simulamos click
-                    // poniendo una señal en AppState. Como no hay campo directo,
-                    // usamos el mecanismo existente: resetear el job para que
-                    // info_description lo detecte con can_render == true.
-                    // La pulsación de Enter se traduce en un click simulado en
-                    // el botón: marcamos el rect para que draw_description_block
-                    // lo detecte en el mismo frame via IsMouseButtonPressed.
-                    // NOTA: la solución más limpia es que info_description
-                    // consulte un flag; aquí usamos SetMousePosition como proxy
-                    // (mueve el cursor virtual al centro del botón y simula click).
-                    // Dado que raylib no tiene "InjectMousePress", simplemente
-                    // guardamos el rect y kbnav_info_draw dibujará el foco;
-                    // el usuario confirma con Enter un segundo frame. En la
-                    // práctica, añadir un flag en AppState es la solución correcta.
-                    // Por ahora reseteamos el job si está en estado Idle/Failed.
                 {
                     auto& job = state.latex_render;
                     if (job.state == LatexRenderState::Idle ||
-                        job.state == LatexRenderState::Failed) {
-                        // Señal: poner state en "listo para compilar"
-                        // (info_description.cpp lo detectará porque can_render=true
-                        //  y el botón estará resaltado; el usuario pulsa Enter de nuevo).
-                        // Para trigger directo, marcamos un flag extra en el job:
-                        job.kb_trigger = true;  // ver nota abajo (*)
-                    }
+                        job.state == LatexRenderState::Failed)
+                        job.kb_trigger = true;
                 }
                 consumed = true;
                 break;
@@ -144,6 +117,20 @@ bool kbnav_info_handle(AppState& state, int split_y_min, int split_y_max,
                         state.pending_nav = { true, ViewMode::MSC2020,
                                               f->code, f->label,
                                               state.msc_root, f };
+                }
+                consumed = true;
+                break;
+
+                case InfoItemKind::StdrefCard:
+                    // Navegar al nodo Standard
+                {
+                    if (state.standard_root) {
+                        auto f = find_node_bfs(state.standard_root, it->data);
+                        if (f)
+                            state.pending_nav = { true, ViewMode::Standard,
+                                                  f->code, f->label,
+                                                  state.standard_root, f };
+                    }
                 }
                 consumed = true;
                 break;
@@ -182,40 +169,26 @@ void kbnav_info_draw() {
     float t = (float)GetTime();
     float alpha = 0.55f + 0.45f * sinf(t * 5.f);
 
-    // Borde exterior pulsante
     DrawRectangleLinesEx(it.rect, 2.f, ColorAlpha(th.accent, alpha));
-    // Glow exterior
     DrawRectangleLinesEx(
         { it.rect.x - 3.f, it.rect.y - 3.f,
           it.rect.width + 6.f, it.rect.height + 6.f },
         1.f, ColorAlpha(th.accent, alpha * 0.30f));
 
-    // Etiqueta de acción en la esquina inferior derecha del ítem
     const char* hint = nullptr;
     switch (it.kind) {
     case InfoItemKind::RenderButton:   hint = "Enter: render";   break;
     case InfoItemKind::ResourceLink:   hint = "Enter: abrir";    break;
-    case InfoItemKind::CrossrefCard:   hint = "Enter: navegar";  break;
+    case InfoItemKind::CrossrefCard:   hint = "Enter: ir a MSC"; break;
+    case InfoItemKind::StdrefCard:     hint = "Enter: ir a STD"; break;
     case InfoItemKind::MathlibHitCard: hint = "Enter: navegar";  break;
     default: break;
     }
     if (hint) {
         int hw = MeasureTextF(hint, 9);
         DrawTextF(hint,
-            (int)(it.rect.x + it.rect.width - hw - 4),
+            (int)(it.rect.x + it.rect.width  - hw - 4),
             (int)(it.rect.y + it.rect.height - 12),
             9, ColorAlpha(th.accent, 0.75f));
     }
 }
-
-// ── (*) Nota sobre kb_trigger ─────────────────────────────────────────────────
-// Para que el trigger del botón Render funcione sin modificar info_description.cpp
-// sería necesario añadir un campo bool kb_trigger en LatexRenderJob (app.hpp).
-// La llamada desde info_description sería:
-//
-//   if ((btn_hov && IsMouseButtonPressed(...)) || job.kb_trigger) {
-//       job.kb_trigger = false;
-//       launch_latex_render(...);
-//   }
-//
-// Ver sección "Integración requerida en info_description.cpp" en el README del módulo.

@@ -11,7 +11,8 @@ enum class InfoItemKind {
     None,
     RenderButton,   // botón "Render LaTeX" / "Re-render LaTeX"
     ResourceLink,   // tarjeta de recurso que abre URL externa
-    CrossrefCard,   // tarjeta de crossref (navega a nodo MSC/STD/Mathlib)
+    CrossrefCard,   // tarjeta de crossref MSC (navega a nodo MSC)
+    StdrefCard,     // tarjeta de crossref Standard (navega a nodo Standard)
     MathlibHitCard, // tarjeta de módulo Mathlib relacionado
 };
 
@@ -53,11 +54,12 @@ void kbnav_info_register_resource(Rectangle r, const std::string& url_or_code,
                                   bool is_web_link);
 
 // Registrar tarjeta de crossref / mathlib hit.
+// kind puede ser CrossrefCard, StdrefCard o MathlibHitCard.
 void kbnav_info_register_crossref(Rectangle r, const std::string& code,
                                   InfoItemKind kind);
 
 // Procesa teclado para la zona Info.
-// • Up/Down ciclan por los ítems registrados.
+// • Up/Down ciclan por los ítems registrados (en orden de registro = orden visual).
 // • Enter activa el ítem actual (render, open URL, navigate).
 // • Espacio expande/contrae el panel (modifica g_split_y).
 // Devuelve true si alguna tecla fue consumida.

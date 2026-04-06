@@ -20,7 +20,6 @@ namespace editor_io {
 
     // ── Rutas ─────────────────────────────────────────────────────────────────────
 
-    /// Nombre base seguro (sin extensión) a partir del code de un nodo.
     inline std::string safe_basename(const std::string& code) {
         std::string s = code;
         for (char& c : s)
@@ -28,7 +27,6 @@ namespace editor_io {
         return s;
     }
 
-    /// .tex compatible con versiones anteriores.
     inline std::string safe_filename(const std::string& code) {
         return safe_basename(code) + ".tex";
     }
@@ -61,33 +59,22 @@ namespace editor_io {
                           const std::string& filename, const std::string& content);
 
     // ── JSON de nodo (<basename>.json) ────────────────────────────────────────────
-    //
-    // Estructura:
-    //   {
-    //     "basic_info": { "note": "...", "texture_key": "...", "msc_refs": [...] },
-    //     "cross_refs":  [ { "target_code": "...", "relation": "..." } ],
-    //     "resources":   [ { "kind": "...", "title": "...", "content": "..." } ]
-    //   }
 
-    /// Carga el JSON del nodo y actualiza sel + edit.cross_refs.
-    /// No-op si el archivo no existe (conserva los datos actuales del nodo).
     void load_node_json(const AppState& state, MathNode* sel, EditState& edit);
 
-    /// Serializa el estado actual de sel + edit.cross_refs al JSON del nodo.
     void save_node_json(const AppState& state,
                         const MathNode* sel,
                         const EditState& edit);
 
+    // ── load_cross_refs_only ──────────────────────────────────────────────────────
+    // Lee SOLO la sección "cross_refs" del JSON de `code` sin tocar ningún MathNode.
+    // Usado por entry_editor para construir sugerencias de nodos hermanos sin
+    // efectos secundarios sobre los datos en memoria.
+    // Devuelve vector vacío si el archivo no existe o no tiene cross_refs.
+    std::vector<EditorCrossRef> load_cross_refs_only(const AppState& state,
+                                                     const std::string& code);
+
     // ── Acople al grafo principal ─────────────────────────────────────────────────
-    //
-    // Cada función recorre el grafo desde `root`, lee el JSON de cada nodo
-    // que tenga archivo y aplica la sección correspondiente al MathNode en vivo.
-    //
-    // ¡NOTA! MathNode debe tener el campo:
-    //   std::vector<CrossRef> cross_refs;
-    // para que acople_cross_refs funcione.
-    //
-    // Sustituye root con tu accessor real: state.root_node, state.graph.root(), etc.
 
     void acople_basic_info (AppState& state, MathNode* root);
     void acople_cross_refs (AppState& state, MathNode* root);

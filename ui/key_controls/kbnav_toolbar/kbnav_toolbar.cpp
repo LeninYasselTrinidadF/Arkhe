@@ -12,19 +12,15 @@ static constexpr int MAX_ITEMS = 96;
 struct ToolbarNavItem {
     ToolbarNavKind kind;
     Rectangle      rect;
-    const char*    label;    // puntero a literal; válido durante el frame
-    int            field_id; // para TextField: ID de active_field; -1 si n/a
+    const char*    label;
+    int            field_id;
 };
 
 static ToolbarNavItem s_items[MAX_ITEMS];
 static int            s_count          = 0;
-
-// Foco: persiste entre frames para que el usuario no lo pierda al redibujar.
 static int            s_focused_idx    = -1;
-
-// Activación: patrón de doble buffer (mismo mecanismo que kbnav_search).
-static int            s_activated      = -1;  // activado ESTE frame
-static int            s_prev_activated = -1;  // activado el frame ANTERIOR
+static int            s_activated      = -1;
+static int            s_prev_activated = -1;
 
 // ── API de registro ───────────────────────────────────────────────────────────
 
@@ -32,7 +28,6 @@ void kbnav_toolbar_begin_frame() {
     s_prev_activated = s_activated;
     s_activated      = -1;
     s_count          = 0;
-    // s_focused_idx NO se resetea: el foco debe persistir frame a frame.
 }
 
 int kbnav_toolbar_register(ToolbarNavKind kind, Rectangle rect,
@@ -56,7 +51,7 @@ bool kbnav_toolbar_is_activated(int idx) {
 
 ToolbarNavKind kbnav_toolbar_focused_kind() {
     if (s_focused_idx < 0 || s_focused_idx >= s_count)
-        return ToolbarNavKind::TextField; // valor por defecto; no usado si idx==-1
+        return ToolbarNavKind::TextField;
     return s_items[s_focused_idx].kind;
 }
 
@@ -64,27 +59,32 @@ int kbnav_toolbar_focused_idx() {
     return (s_count > 0) ? s_focused_idx : -1;
 }
 
-// ── Bridge interno: sincroniza foco con active_field ─────────────────────────
+// ── apply_bridge ─────────────────────────────────────────────────────────────
+// Sincroniza foco con active_field.
 //
-// Llamado desde handle() después de cada cambio de foco por Tab.
-// · TextField  → pone state.toolbar.active_field = field_id
-//                (permite que draw_labeled_field / draw_text_field lo vean
-//                 en el frame SIGUIENTE; el draw del frame actual ya tiene
-//                 kbnav_toolbar_is_focused() para el highlight visual).
-// · Otros      → limpia active_field para soltar cualquier campo de texto.
+// Para corregir el problema de "Tab da apariencia de foco pero requiere clic
+// adicional para capturar texto":
+//   · Al enfocar un TextField vía Tab se activa force_field_activate = true.
+//   · draw_text_field en PanelWidget debe leer este flag y, cuando sea true,
+//     activar la captura de chars sin esperar un clic, consumiéndolo
+//     (force_field_activate = false) inmediatamente después de procesarlo.
+//
+// ⚠  PENDIENTE: modificar PanelWidget::draw_text_field para consumir este flag.
+//    Leer state.toolbar.force_field_activate al inicio del método y, si es true
+//    y (aid == field_id), saltar el requisito del clic y poner force_field_activate = false.
 
 static void apply_bridge(AppState& state) {
     if (s_focused_idx < 0 || s_focused_idx >= s_count) return;
     const ToolbarNavItem& it = s_items[s_focused_idx];
 
     if (it.kind == ToolbarNavKind::TextField && it.field_id >= 0) {
-        state.toolbar.active_field = it.field_id;
+        state.toolbar.active_field       = it.field_id;
+        state.toolbar.force_field_activate = true;  // ← fix Tab
     }
     else if (it.kind != ToolbarNavKind::Textarea) {
-        // Al llegar a un botón, quitar el foco de los campos de texto.
-        // La Textarea gestiona body_active en draw_body_section.
         if (state.toolbar.active_field >= 0)
             state.toolbar.active_field = -1;
+        state.toolbar.force_field_activate = false;
     }
 }
 
@@ -93,16 +93,14 @@ static void apply_bridge(AppState& state) {
 bool kbnav_toolbar_handle(AppState& state, bool textarea_active) {
     if (s_count == 0) return false;
 
-    // Clamp por si el recuento de ítems cambió (cambio de nodo, panel, etc.)
     if (s_focused_idx >= s_count) s_focused_idx = s_count - 1;
 
     bool consumed = false;
     bool shift    = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
 
-    // ── Tab / Shift+Tab: ciclar ítems ─────────────────────────────────────────
+    // ── Tab / Shift+Tab ───────────────────────────────────────────────────────
     if (IsKeyPressed(KEY_TAB)) {
         if (s_focused_idx < 0) {
-            // Primera pulsación de Tab: ir al primer ítem.
             s_focused_idx = 0;
         } else if (shift) {
             s_focused_idx = (s_focused_idx - 1 + s_count) % s_count;
@@ -113,9 +111,7 @@ bool kbnav_toolbar_handle(AppState& state, bool textarea_active) {
         consumed = true;
     }
 
-    // ── Enter: activar Button / BrowseButton / FileItem ───────────────────────
-    // No actúa cuando la textarea está capturando (textarea_active == true)
-    // porque Enter en ese contexto inserta \n en el buffer.
+    // ── Enter ─────────────────────────────────────────────────────────────────
     if (!textarea_active &&
         (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER)))
     {
@@ -133,12 +129,11 @@ bool kbnav_toolbar_handle(AppState& state, bool textarea_active) {
         }
     }
 
-    // ── Escape: liberar foco (sin cerrar el panel) ────────────────────────────
-    // Escape con paneles modales abiertos ya no navega por el mapa (ver main.cpp),
-    // así que podemos interceptarlo aquí para limpiar el foco de campo.
+    // ── Escape: liberar foco ──────────────────────────────────────────────────
     if (IsKeyPressed(KEY_ESCAPE) && s_focused_idx >= 0) {
         if (state.toolbar.active_field >= 0)
             state.toolbar.active_field = -1;
+        state.toolbar.force_field_activate = false;
         s_focused_idx = -1;
         consumed = true;
     }
@@ -167,16 +162,12 @@ void kbnav_toolbar_draw() {
     float t     = (float)GetTime();
     float alpha = 0.55f + 0.45f * sinf(t * 5.f);
 
-    // ── Borde pulsante ────────────────────────────────────────────────────────
     DrawRectangleLinesEx(it.rect, 2.f, ColorAlpha(th.accent, alpha));
-
-    // ── Glow exterior tenue ───────────────────────────────────────────────────
     DrawRectangleLinesEx(
         { it.rect.x - 3.f, it.rect.y - 3.f,
           it.rect.width  + 6.f, it.rect.height + 6.f },
         1.f, ColorAlpha(th.accent, alpha * 0.25f));
 
-    // ── Etiqueta del ítem (chip encima del borde superior) ────────────────────
     const char* lbl = (it.label && it.label[0]) ? it.label
                                                  : action_hint(it.kind);
     if (lbl && lbl[0]) {
@@ -192,7 +183,6 @@ void kbnav_toolbar_draw() {
         DrawTextF(lbl, (int)(lx + 5), (int)(ly + (lh - lfs) / 2), lfs, th.accent);
     }
 
-    // ── Hint de acción (debajo del borde inferior) ────────────────────────────
     const char* hint = action_hint(it.kind);
     if (hint && hint[0]) {
         int hfs = 9;

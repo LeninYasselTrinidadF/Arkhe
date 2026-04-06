@@ -1,4 +1,5 @@
 #include "ui/info/info_description.hpp"
+#include "ui/info/info_text_select.hpp"
 #include "ui/aesthetic/font_manager.hpp"
 #include "ui/aesthetic/theme.hpp"
 #include "ui/aesthetic/skin.hpp"
@@ -19,6 +20,32 @@ namespace fs = std::filesystem;
 
 // ── Helpers de texto ──────────────────────────────────────────────────────────
 
+// wrapped_text_sel: igual que wrapped_text pero registra cada línea en
+// g_info_sel para que sea seleccionable con mouse.
+static int wrapped_text_sel(const char* text, int x, int y,
+    int max_w, int font_size, Color color)
+{
+    std::string s(text);
+    int line_y = y;
+    while (!s.empty()) {
+        int chars = 1;
+        while (chars < (int)s.size() &&
+            MeasureTextF(s.substr(0, chars + 1).c_str(), font_size) < max_w)
+            chars++;
+        if (chars < (int)s.size() && s[chars] != ' ') {
+            int sp = (int)s.rfind(' ', chars);
+            if (sp > 0) chars = sp;
+        }
+        std::string line = s.substr(0, chars);
+        DrawTextFS(line.c_str(), x, line_y, font_size, color);
+        s = s.substr(chars);
+        if (!s.empty() && s[0] == ' ') s = s.substr(1);
+        line_y += font_size + 4;
+    }
+    return line_y;
+}
+
+// wrapped_text sin registro (usado para previews internos, no seleccionables)
 static int wrapped_text(const char* text, int x, int y,
     int max_w, int font_size, Color color)
 {
@@ -114,7 +141,6 @@ static std::string temp_dir() {
     return std::string(t) + "/arkhe_latex/";
 }
 
-// Convierte un Color de raylib a hex HTML (sin #), ej: {13,15,26,255} → "0D0F1A"
 static std::string color_to_hex(Color c) {
     std::ostringstream ss;
     ss << std::hex << std::uppercase << std::setfill('0')
@@ -124,8 +150,6 @@ static std::string color_to_hex(Color c) {
     return ss.str();
 }
 
-// Genera el .tex con standalone y los colores del tema inyectados.
-// Si el .tex ya tiene \documentclass propio, se usa tal cual.
 static std::string wrap_tex(const std::string& raw,
     const std::string& bg_hex,
     const std::string& fg_hex)
@@ -135,13 +159,13 @@ static std::string wrap_tex(const std::string& raw,
     return
         "\\documentclass[preview, border=8pt]{standalone}\n"
         "\\usepackage{amsmath,amssymb,amsthm,xcolor}\n"
-        "\\definecolor{fgcolor}{HTML}{" + fg_hex + "}\n" // Definir color explícito
+        "\\definecolor{fgcolor}{HTML}{" + fg_hex + "}\n"
         "\\definecolor{bgcolor}{HTML}{" + bg_hex + "}\n"
         "\\pagecolor{bgcolor}\n"
         "\\begin{document}\n"
-        "\\color{fgcolor}\n"      // Forzar color de texto principal
-        "\\everymath{\\color{fgcolor}}\n"    // Forzar en fórmulas inline
-        "\\everydisplay{\\color{fgcolor}}\n" // Forzar en fórmulas block
+        "\\color{fgcolor}\n"
+        "\\everymath{\\color{fgcolor}}\n"
+        "\\everydisplay{\\color{fgcolor}}\n"
         + raw +
         "\n\\end{document}\n";
 }
@@ -169,7 +193,6 @@ void launch_latex_render(AppState& state,
     std::string lx = state.toolbar.latex_path;
     std::string pp = state.toolbar.pdftoppm_path;
 
-    // Capturar colores del tema en el main thread antes del detach
     std::string bg_hex = color_to_hex(g_theme.bg_app);
     std::string fg_hex = color_to_hex(g_theme.text_primary);
 
@@ -297,7 +320,6 @@ static int draw_latex_widget(AppState& state, int x, int y,
     }
     if (job.state == LatexRenderState::Ready && job.tex_loaded) {
         Texture2D& tex = job.texture;
-        // Sin fondo ni borde: el PNG ya lleva el color del tema de fondo
         float scale = std::min((float)max_w / tex.width, 1.0f);
         int dw = (int)(tex.width * scale);
         int dh = (int)(tex.height * scale);
@@ -328,10 +350,11 @@ int draw_description_block(AppState& state,
     bool has_tex = !cached_display.empty();
 
     if (!has_tex) {
+        // Descripción seleccionable con wrapped_text_sel
         std::string desc = (sel && !sel->note.empty())
             ? sel->note
             : default_description(sel);
-        y = wrapped_text(desc.c_str(), x, y, w / 2 - 30, 13, th.text_primary);
+        y = wrapped_text_sel(desc.c_str(), x, y, w / 2 - 30, 13, th.text_primary);
     }
     else {
         // Chip ".tex"
@@ -367,7 +390,6 @@ int draw_description_block(AppState& state,
                 DrawRectangleLinesEx(btn_r, 1.0f, th_alpha(th.success));
             }
             DrawTextF(render_label, btn_x + 8, y + 5, 10, th.text_primary);
-            // Registrar para teclado
             kbnav_info_register_render(btn_r);
 
             bool kb_fire = state.latex_render.kb_trigger;
@@ -386,11 +408,12 @@ int draw_description_block(AppState& state,
             y += 10;
         }
 
+        // Fuente .tex seleccionable
         DrawTextF("TEXTO FUENTE (.tex):", x, y, 10, th_alpha(th.text_dim));
         y += 14;
         std::string preview = cached_display;
         if ((int)preview.size() > 600) preview = preview.substr(0, 597) + "...";
-        y = wrapped_text(preview.c_str(), x, y, w - 30, 11, th.text_secondary);
+        y = wrapped_text_sel(preview.c_str(), x, y, w - 30, 11, th.text_secondary);
     }
     return y;
 }

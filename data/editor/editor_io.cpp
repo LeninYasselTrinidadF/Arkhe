@@ -78,7 +78,7 @@ void load_node_json(const AppState& state, MathNode* sel, EditState& edit)
 {
     if (!sel) return;
     std::ifstream f(node_json_path(state, sel->code));
-    if (!f.is_open()) return;   // sin JSON: conservar datos del grafo principal
+    if (!f.is_open()) return;
 
     try {
         auto j = json::parse(f);
@@ -127,12 +127,10 @@ void save_node_json(const AppState& state,
 
     json j;
 
-    // basic_info: datos ya reflejados en sel (live-edit)
     j["basic_info"]["note"]        = sel->note;
     j["basic_info"]["texture_key"] = sel->texture_key;
     j["basic_info"]["msc_refs"]    = sel->msc_refs;
 
-    // cross_refs
     json cr_arr = json::array();
     for (auto& cr : edit.cross_refs) {
         json o;
@@ -142,7 +140,6 @@ void save_node_json(const AppState& state,
     }
     j["cross_refs"] = cr_arr;
 
-    // resources
     json res_arr = json::array();
     for (auto& r : sel->resources) {
         json o;
@@ -157,7 +154,36 @@ void save_node_json(const AppState& state,
     if (f.is_open()) f << j.dump(2);
 }
 
-// ── Traverse helper (interno) ─────────────────────────────────────────────────
+// ── load_cross_refs_only ──────────────────────────────────────────────────────
+// Lee solo la sección "cross_refs" del JSON sin tocar ningún MathNode.
+// Sin efectos secundarios. Útil para construir sugerencias desde hermanos.
+
+std::vector<EditorCrossRef> load_cross_refs_only(const AppState& state,
+                                                  const std::string& code)
+{
+    std::vector<EditorCrossRef> result;
+    if (code.empty()) return result;
+
+    std::ifstream f(node_json_path(state, code));
+    if (!f.is_open()) return result;
+
+    try {
+        auto j = json::parse(f);
+        if (!j.contains("cross_refs")) return result;
+        for (auto& cr : j["cross_refs"]) {
+            EditorCrossRef ref;
+            ref.target_code = cr.value("target_code", "");
+            ref.relation    = cr.value("relation",    "see_also");
+            if (!ref.target_code.empty())
+                result.push_back(std::move(ref));
+        }
+    }
+    catch (...) {}
+
+    return result;
+}
+
+// ── Traverse helper ───────────────────────────────────────────────────────────
 
 static void traverse(MathNode* node, const std::function<void(MathNode*)>& fn)
 {

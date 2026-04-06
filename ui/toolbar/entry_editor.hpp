@@ -34,6 +34,11 @@ class EntryEditor : public PanelWidget {
     float body_scroll = 0.f;
     bool  body_active = false;
 
+    // ── Scroll maestro del panel ──────────────────────────────────────────────
+    // Permite desplazar todo el contenido del editor cuando el cuerpo LaTeX
+    // crece y empuja las secciones inferiores fuera de la ventana.
+    float panel_scroll = 0.f;
+
     // ── IO helpers ────────────────────────────────────────────────────────────
     void load_index();
     void save_tex_file(MathNode* sel);   ///< Escribe body_buf al disco.

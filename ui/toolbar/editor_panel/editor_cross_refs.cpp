@@ -6,9 +6,8 @@
 
 namespace editor_sections {
 
-// ── Pill de relación ──────────────────────────────────────────────────────────
-// Dibuja un botón de selección de tipo de relación.
-// Retorna true si fue seleccionado.
+// ── draw_relation_pill ────────────────────────────────────────────────────────
+
 static bool draw_relation_pill(
     const char* label, bool selected,
     int x, int y, Vector2 mouse)
@@ -34,6 +33,7 @@ void draw_cross_refs_section(
     int lx, int lw, int py, int ph,
     int& y, Vector2 mouse,
     const std::vector<std::string>& hint_codes,
+    const std::vector<CrossRefSuggestion>& suggestions,
     SaveFn on_save)
 {
     edit.update_dirty_flags(sel);
@@ -48,23 +48,20 @@ void draw_cross_refs_section(
 
     // ── Lista de refs existentes ──────────────────────────────────────────────
     int to_remove = -1;
-    for (int i = 0; i < (int)edit.cross_refs.size() && y + 22 < py + ph - 80; i++) {
+    for (int i = 0; i < (int)edit.cross_refs.size(); i++) {
         auto& cr = edit.cross_refs[i];
 
-        // Etiqueta de relación (pill pequeño, no interactivo aquí)
         const char* rel_lbl = xref_relation_label(cr.relation);
         int rw = MeasureTextF(rel_lbl, 9) + 10;
         DrawRectangle(lx, y, rw, 20, { 28, 40, 80, 200 });
         DrawRectangleLinesEx({ (float)lx,(float)y,(float)rw, 20.f }, 1.f, { 50,80,160,180 });
         DrawTextF(rel_lbl, lx + 5, y + 4, 9, { 130, 170, 240, 220 });
 
-        // Código destino
         int cx = lx + rw + 6;
         int cw = lw - rw - 30;
         DrawRectangle(cx, y, cw, 20, { 18, 22, 40, 230 });
         DrawTextF(cr.target_code.c_str(), cx + 4, y + 4, 10, { 190, 210, 250, 220 });
 
-        // Botón eliminar
         Rectangle del_r = { (float)(lx + lw - 22), (float)y, 20.f, 20.f };
         int  del_idx = kbnav_toolbar_register(ToolbarNavKind::Button, del_r, "x");
         bool del_hov = CheckCollisionPointRec(mouse, del_r);
@@ -86,15 +83,72 @@ void draw_cross_refs_section(
         y += 16;
     }
 
+    // ── Sugerencias de nodos hermanos ─────────────────────────────────────────
+    if (!suggestions.empty()) {
+        DrawLine(lx, y + 2, lx + lw, y + 2, { 30, 35, 65, 100 });
+        y += 8;
+
+        // Título de sección
+        DrawTextF("Sugerencias (de nodos paralelos):", lx, y, 9, { 80, 110, 170, 200 });
+        y += 14;
+
+        for (auto& s : suggestions) {
+            const char* rel = xref_relation_label(s.ref.relation);
+
+            // Etiqueta de relación
+            int rw = MeasureTextF(rel, 9) + 10;
+            DrawRectangle(lx, y, rw, 18, { 25, 38, 75, 190 });
+            DrawRectangleLinesEx({ (float)lx,(float)y,(float)rw,18.f }, 1.f, { 45,70,140,160 });
+            DrawTextF(rel, lx + 5, y + 3, 9, { 120, 160, 230, 210 });
+
+            // Código destino
+            int cx = lx + rw + 4;
+            std::string code_label = s.ref.target_code;
+            if ((int)code_label.size() > 28) code_label = code_label.substr(0, 27) + "…";
+            DrawRectangle(cx, y, lw - rw - 30, 18, { 16, 20, 38, 220 });
+            DrawTextF(code_label.c_str(), cx + 4, y + 3, 9, { 180, 200, 245, 215 });
+
+            // Origen (hermano)
+            std::string from_str = "desde: ";
+            from_str += (s.from_label.size() > 18)
+                ? s.from_label.substr(0, 17) + "…"
+                : s.from_label;
+            int tw = MeasureTextF(from_str.c_str(), 8);
+            DrawTextF(from_str.c_str(),
+                lx + lw - 22 - tw - 4, y + 4, 8, { 100, 120, 180, 160 });
+
+            // Botón [+]
+            Rectangle add_r = { (float)(lx + lw - 22), (float)y, 20.f, 18.f };
+            int  add_idx = kbnav_toolbar_register(ToolbarNavKind::Button, add_r, "+");
+            bool add_hov = CheckCollisionPointRec(mouse, add_r);
+            DrawRectangleRec(add_r,
+                (add_hov || kbnav_toolbar_is_focused(add_idx))
+                    ? RL{ 40, 100, 50, 255 } : RL{ 25, 60, 32, 200 });
+            DrawRectangleLinesEx(add_r, 1.f, { 55, 130, 65, 180 });
+            DrawTextF("+", (int)add_r.x + 6, (int)add_r.y + 3, 10, WHITE);
+
+            bool do_add = (add_hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+                        || kbnav_toolbar_is_activated(add_idx);
+            if (do_add) {
+                bool dup = false;
+                for (auto& ex : edit.cross_refs)
+                    if (ex.target_code == s.ref.target_code) { dup = true; break; }
+                if (!dup)
+                    edit.cross_refs.push_back(s.ref);
+            }
+
+            y += 22;
+        }
+    }
+
     // ── Separador ─────────────────────────────────────────────────────────────
     DrawLine(lx, y + 2, lx + lw, y + 2, { 30, 35, 65, 150 });
     y += 8;
 
-    // ── Formulario de añadir ──────────────────────────────────────────────────
+    // ── Campo de código (formulario de añadir manual) ─────────────────────────
     DrawTextF("+ Nueva ref cruzada:", lx, y, 10, { 90, 110, 170, 200 });
     y += 14;
 
-    // Campo de código
     {
         Rectangle fr = { (float)lx, (float)y, (float)(lw - 4), 18.f };
         kbnav_toolbar_register(ToolbarNavKind::TextField, fr, "Codigo destino", F_XREF_CODE);
@@ -104,8 +158,6 @@ void draw_cross_refs_section(
     y += 22;
 
     // ── Autocomplete ──────────────────────────────────────────────────────────
-    // Muestra hasta 5 códigos que contengan el prefijo escrito.
-    // El dropdown se dibuja encima del contenido siguiente (no empuja y).
     if (aid == F_XREF_CODE && edit.new_xref_code[0] != '\0') {
         std::string prefix = edit.new_xref_code;
         int hitem = 18, shown = 0, hy = y;
@@ -120,7 +172,7 @@ void draw_cross_refs_section(
             if (hhov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                 strncpy(edit.new_xref_code, code.c_str(), 63);
                 edit.new_xref_code[63] = '\0';
-                aid = -1;  // cerrar autocomplete
+                aid = -1;
             }
             hy += hitem;
             shown++;
@@ -135,16 +187,18 @@ void draw_cross_refs_section(
             const char* lbl = xref_relation_label(XREF_RELATIONS[i]);
             int pw = MeasureTextF(lbl, 9) + 10;
             if (px + pw > lx + lw - 4) { px = lx; y += 20; }
-            if (draw_relation_pill(lbl, sel_rel, px, y, mouse)) {
+            if (draw_relation_pill(lbl, sel_rel, px, y, mouse))
                 strncpy(edit.new_xref_rel, XREF_RELATIONS[i], 31);
-            }
             px += pw + 4;
         }
         y += 22;
     }
 
-    // ── Botón Agregar ─────────────────────────────────────────────────────────
-    const int add_bw = 60;
+    // ── Fila: botón Agregar + botón Buscar en grafo ───────────────────────────
+    const int add_bw    = 60;
+    const int search_bw = lw - add_bw - 8;
+
+    // Botón Agregar (derecha)
     Rectangle add_r = { (float)(lx + lw - add_bw), (float)y, (float)add_bw, 20.f };
     int  add_idx = kbnav_toolbar_register(ToolbarNavKind::Button, add_r, "Agregar ref");
     bool add_hov = CheckCollisionPointRec(mouse, add_r);
@@ -162,6 +216,31 @@ void draw_cross_refs_section(
         cr.relation    = edit.new_xref_rel;
         edit.cross_refs.push_back(cr);
         edit.new_xref_code[0] = '\0';
+    }
+
+    // Botón "Buscar en grafo" (izquierda)
+    if (state.crossref_picker_active) {
+        // Modo picker activo: mostrar indicador en lugar del botón
+        DrawRectangle(lx, y, search_bw, 20, { 50, 70, 20, 200 });
+        DrawRectangleLinesEx({ (float)lx,(float)y,(float)search_bw,20.f },
+            1.f, { 120, 180, 40, 220 });
+        DrawTextF("[ Picker activo — navega y presiona R ]",
+            lx + 6, y + 4, 9, { 200, 240, 100, 240 });
+    } else {
+        Rectangle search_r = { (float)lx, (float)y, (float)search_bw, 20.f };
+        int  search_idx = kbnav_toolbar_register(ToolbarNavKind::Button, search_r,
+                                                  "Buscar ref cruzada");
+        bool search_hov = CheckCollisionPointRec(mouse, search_r);
+        DrawRectangleRec(search_r,
+            (search_hov || kbnav_toolbar_is_focused(search_idx))
+                ? RL{ 35, 55, 120, 255 } : RL{ 22, 35, 80, 220 });
+        DrawRectangleLinesEx(search_r, 1.f, { 55, 85, 180, 200 });
+        DrawTextF("Buscar ref cruzada  [R]", lx + 6, y + 4, 9, { 160, 190, 255, 230 });
+
+        bool do_search = (search_hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+                       || kbnav_toolbar_is_activated(search_idx);
+        if (do_search)
+            state.crossref_picker_begin();
     }
     y += 26;
 

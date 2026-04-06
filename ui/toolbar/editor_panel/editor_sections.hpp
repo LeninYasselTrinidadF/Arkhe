@@ -16,16 +16,21 @@
 namespace editor_sections {
 
 // ── Tipo de callback de guardado ──────────────────────────────────────────────
-// Firma: on_save(sel, edit, state)
 using SaveFn = void (*)(MathNode*, EditState&, AppState&);
 
+// ── CrossRefSuggestion ────────────────────────────────────────────────────────
+// Sugerencia de referencia cruzada derivada de los nodos hermanos del nodo
+// actual. Se construye en entry_editor.cpp y se pasa a draw_cross_refs_section.
+struct CrossRefSuggestion {
+    EditorCrossRef ref;         ///< Referencia sugerida (target_code + relation)
+    std::string    from_label;  ///< Label del nodo hermano que tiene esta ref
+    std::string    from_code;   ///< Code del nodo hermano (para debug/display)
+};
+
 // ── draw_node_header ──────────────────────────────────────────────────────────
-/// Cabecera fija (no colapsable): «Nodo: <code>  |  <label>» + separador.
 void draw_node_header(MathNode* sel, int lx, int lw, int& y);
 
 // ── draw_basic_info_section ───────────────────────────────────────────────────
-/// Sección colapsable: Nota, Texture key, MSC refs.
-/// Escribe en vivo sobre sel. «Guardar» → on_save → save_node_json.
 void draw_basic_info_section(
     MathNode* sel, EditState& edit, AppState& state,
     int lx, int lw,
@@ -33,8 +38,6 @@ void draw_basic_info_section(
     SaveFn on_save);
 
 // ── draw_body_section ─────────────────────────────────────────────────────────
-/// Sección colapsable: textarea LaTeX + preview + file manager.
-/// «Guardar» escribe el .tex (on_save_tex) y después llama on_save_json.
 void draw_body_section(
     MathNode* sel, EditState& edit, AppState& state,
     int lx, int lw, int py, int ph,
@@ -44,7 +47,6 @@ void draw_body_section(
     void (*on_save_tex)(MathNode*, EditState&, AppState&, bool&));
 
 // ── draw_body_preview ─────────────────────────────────────────────────────────
-/// (interno, llamado por draw_body_section; declarado aquí para editor_body.cpp)
 void draw_body_preview(
     MathNode* sel, EditState& edit, AppState& state,
     int lx, int lw, int py, int ph,
@@ -52,17 +54,17 @@ void draw_body_preview(
     float& body_scroll);
 
 // ── draw_cross_refs_section ───────────────────────────────────────────────────
-/// Sección colapsable: lista de referencias cruzadas + formulario de añadir.
-/// hint_codes: códigos de nodos hermanos para autocompletar.
+// hint_codes   : códigos de hijos del nodo actual para autocompletar en el campo.
+// suggestions  : referencias cruzadas de nodos hermanos propuestas automáticamente.
 void draw_cross_refs_section(
     MathNode* sel, EditState& edit, AppState& state,
     int lx, int lw, int py, int ph,
     int& y, Vector2 mouse,
     const std::vector<std::string>& hint_codes,
+    const std::vector<CrossRefSuggestion>& suggestions,
     SaveFn on_save);
 
 // ── draw_resources_section ────────────────────────────────────────────────────
-/// Sección colapsable: lista de recursos + formulario de añadir.
 void draw_resources_section(
     MathNode* sel, EditState& edit, AppState& state,
     int lx, int lw, int py, int ph,
@@ -70,7 +72,6 @@ void draw_resources_section(
     SaveFn on_save);
 
 // ── draw_file_manager ─────────────────────────────────────────────────────────
-/// Popup flotante de selección de .tex (sin cambios de firma).
 void draw_file_manager(
     MathNode* sel, EditState& edit, AppState& state,
     int panel_x, int panel_y, Vector2 mouse,

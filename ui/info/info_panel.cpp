@@ -3,6 +3,7 @@
 #include "ui/info/info_description.hpp"
 #include "ui/info/info_crossrefs.hpp"
 #include "ui/info/info_resources.hpp"
+#include "ui/info/info_text_select.hpp"
 #include "data/editor/editor_io.hpp"
 #include "ui/aesthetic/overlay.hpp"
 #include "ui/aesthetic/theme.hpp"
@@ -18,6 +19,7 @@
 
 void draw_info_panel(AppState& state, Vector2 mouse) {
     kbnav_info_begin_frame();
+    g_info_sel.begin_frame();       // ← reset text entries cada frame
     poll_latex_render(state);
 
     const Theme& th = g_theme;
@@ -29,15 +31,10 @@ void draw_info_panel(AppState& state, Vector2 mouse) {
     int scroll_top = top + HEADER_H;
     int scroll_h = vh - HEADER_H;
 
-    // ── Si hay un panel modal flotante, no procesar input del mouse ───────────
-    // overlay::blocks_mouse devuelve true cuando main.cpp empujó el rect
-    // full-screen (cualquier panel de toolbar abierto). Se neutraliza el mouse
-    // para que hover, clicks y scroll wheel no actúen, pero el panel sigue
-    // dibujándose normalmente.
     const bool info_blocked = overlay::blocks_mouse(mouse);
     const Vector2 eff_mouse = info_blocked
         ? Vector2{ -9999.f, -9999.f }
-    : mouse;
+        : mouse;
 
     // Fondo del panel inferior
     if (g_skin.panel.valid())
@@ -51,7 +48,7 @@ void draw_info_panel(AppState& state, Vector2 mouse) {
     draw_info_header(state, top, w);
     DrawLine(0, top + HEADER_H, w, top + HEADER_H, th_alpha(th.border));
 
-    // Scroll con rueda — solo cuando no está bloqueado
+    // Scroll con rueda
     if (!info_blocked && mouse.y > scroll_top) {
         float wh = GetMouseWheelMove();
         if (wh != 0.0f) {
@@ -131,7 +128,7 @@ void draw_info_panel(AppState& state, Vector2 mouse) {
         }
     }
 
-    // Área scrollable con scissor
+    // ── Área scrollable con scissor ───────────────────────────────────────────
     const int col = 18;
     const int card_w = (w - col * 2 - 10 * 2) / 3;
     const int card_h = 68;
@@ -139,8 +136,6 @@ void draw_info_panel(AppState& state, Vector2 mouse) {
     BeginScissorMode(0, scroll_top, w, scroll_h);
     int y = scroll_top + 14 - (int)state.resource_scroll;
 
-    // Todas las funciones de dibujo reciben eff_mouse: si hay modal, el mouse
-    // está en (-9999,-9999) y ningún hover ni click se activa.
     draw_sprite_preview(state, sel, w - 56 - col, y, 56);
 
     y = draw_description_block(state, sel, tex_target,
@@ -164,9 +159,18 @@ void draw_info_panel(AppState& state, Vector2 mouse) {
         - scroll_h - scroll_top + 40);
     if (state.resource_scroll > max_s) state.resource_scroll = max_s;
 
+    // ── Selección de texto: highlights y rect de arrastre ─────────────────────
+    // Se dibuja aquí, dentro del scissor, para que el clip sea correcto.
+    g_info_sel.draw();
+
     EndScissorMode();
 
-    // Teclado zona Info
+    // ── Input de texto: drag, Ctrl+C, Ctrl+A ──────────────────────────────────
+    // Fuera del scissor para poder leer el estado de mouse correctamente,
+    // pero los efectos visuales ya se manejaron arriba.
+    g_info_sel.handle(mouse, scroll_top, info_blocked);
+
+    // ── Teclado zona Info ─────────────────────────────────────────────────────
     {
         const int SPLIT_MIN = TOOLBAR_H + 160;
         const int SPLIT_MAX = SH() - 120;
@@ -174,7 +178,7 @@ void draw_info_panel(AppState& state, Vector2 mouse) {
         kbnav_info_draw();
     }
 
-    // Scrollbar
+    // ── Scrollbar ─────────────────────────────────────────────────────────────
     int full_h = y + (int)state.resource_scroll - scroll_top;
     if (full_h > scroll_h) {
         float ratio = (float)scroll_h / full_h;

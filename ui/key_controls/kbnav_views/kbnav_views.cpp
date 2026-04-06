@@ -29,13 +29,37 @@ static ViewMode mode_ccw(ViewMode m) {
 // ── kbnav_views_handle ────────────────────────────────────────────────────────
 
 bool kbnav_views_handle(AppState& state, Camera2D& cam, Camera2D& dep_cam) {
-    // Solo actua cuando la zona activa es Canvas (o el sistema kbnav no esta activo).
-    // Si la zona es Search, Info o Toolbar, las teclas no deben interferir con las vistas.
     if (g_kbnav.active && g_kbnav.zone != FocusZone::Canvas)
         return false;
 
     Camera2D& active_cam = state.dep_view_active ? dep_cam : cam;
     bool consumed = false;
+
+    // ── R: confirmar selección en modo picker ─────────────────────────────────
+    // Tiene prioridad máxima cuando el picker está activo; no se procesa
+    // ningún otro hotkey de vista.
+    if (state.crossref_picker_active) {
+        if (IsKeyPressed(KEY_R)) {
+            std::string target;
+            if (state.dep_view_active) {
+                // En dep_view: usar el nodo con foco actual
+                target = g_kbnav.dep_sel_id.empty()
+                    ? state.dep_focus_id
+                    : g_kbnav.dep_sel_id;
+            } else {
+                // En bubble_view: usar el nodo seleccionado
+                target = state.selected_code;
+            }
+
+            if (!target.empty())
+                state.crossref_picker_confirm(target);
+            // Si no hay selección, simplemente ignorar (no confirmar vacío)
+            consumed = true;
+        }
+        // El resto de hotkeys no actúa durante el picker salvo Esc
+        // (Esc se maneja en main.cpp)
+        return consumed;
+    }
 
     // ── +/- zoom ──────────────────────────────────────────────────────────────
     if (IsKeyPressed(KEY_EQUAL) || IsKeyPressed(KEY_KP_ADD)) {
@@ -58,8 +82,6 @@ bool kbnav_views_handle(AppState& state, Camera2D& cam, Camera2D& dep_cam) {
     if (IsKeyPressed(KEY_N)) { state.mode = mode_ccw(state.mode); consumed = true; }
 
     // ── C: casa ───────────────────────────────────────────────────────────────
-    // dep_view → solo recentra la camara (no hay nodo raiz en deps)
-    // burbujas → volver al nodo raiz del nav_stack
     if (IsKeyPressed(KEY_C)) {
         if (state.dep_view_active) {
             active_cam.target = { 0.f, 0.f };
@@ -94,8 +116,6 @@ bool kbnav_views_handle(AppState& state, Camera2D& cam, Camera2D& dep_cam) {
     }
 
     // ── D: atras ──────────────────────────────────────────────────────────────
-    // dep_view → retrocede en el historial de navegacion del grafo de deps
-    // burbujas → sube un nivel en el nav_stack (equivale al boton < Atras)
     if (IsKeyPressed(KEY_D)) {
         if (state.dep_view_active) {
             dep_view_back(state, dep_cam);

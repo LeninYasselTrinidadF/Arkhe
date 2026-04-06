@@ -37,15 +37,10 @@ struct ToolbarState {
     char mathlib_src_path[512] = "C:/Users/USUARIO/Documents/mathlib_clone";
 
     // ── Rutas de override para JSONs Mathlib ──────────────────────────────────
-    // Si no están vacíos, reload_all_assets los usa en lugar de los paths por defecto.
-    // Permiten cargar un JSON externo sin regenerar desde el código fuente.
-    char mathlib_layout_override[512] = {};   // override para mathlib_layout.json
-    char mathlib_deps_override[512] = {};   // override para deps_mathlib.json
+    char mathlib_layout_override[512] = {};
+    char mathlib_deps_override[512] = {};
 
-    // Flags de activacion
     bool assets_changed = false;
-
-    // Cual campo de texto esta activo en el panel Ubicaciones
     int  active_field = -1;
 
     // Paneles flotantes
@@ -55,8 +50,13 @@ struct ToolbarState {
     bool config_open = false;
 
     // ── Tema visual ───────────────────────────────────────────────────────────
-    // 0=Dark  1=Light  2=Bocchi  3=ChainsawMan  4=Generic
     int  theme_id = 0;
+
+    // ── Tab focus fix ─────────────────────────────────────────────────────────
+    // Cuando kbnav_toolbar activa un TextField vía Tab, este flag indica a
+    // draw_text_field que active la captura de chars sin necesitar un clic.
+    // draw_text_field debe consumirlo (ponerlo a false) tras procesarlo.
+    bool force_field_activate = false;
 };
 
 // ── Estado de render LaTeX ────────────────────────────────────────────────────
@@ -126,6 +126,21 @@ struct AppState {
     };
     PendingNav pending_nav;
 
+    // ── Cross-ref picker ──────────────────────────────────────────────────────
+    // Modo interactivo: el usuario navega el grafo y presiona R sobre un nodo
+    // para seleccionarlo como referencia cruzada. El editor se cierra mientras
+    // dura el picker y se reabre con el resultado cuando el usuario confirma.
+    bool        crossref_picker_active  = false;
+    std::string crossref_picker_result; // código del nodo seleccionado (vacío si pendiente)
+
+    // Snapshot de navegación guardado al activar el picker.
+    // Se restaura al confirmar (R) o cancelar (Esc).
+    std::vector<std::shared_ptr<MathNode>> crossref_picker_saved_stack;
+    std::string crossref_picker_saved_code;
+    std::string crossref_picker_saved_label;
+    bool        crossref_picker_saved_dep    = false;
+    std::string crossref_picker_saved_dep_id;
+
     MathNode* current() const {
         return nav_stack.empty() ? nullptr : nav_stack.back().get();
     }
@@ -186,6 +201,42 @@ struct AppState {
         auto cs = load_cam();
         cam.target = cs.target;
         cam.zoom = cs.zoom > 0.f ? cs.zoom : 1.f;
+    }
+
+    // ── Helpers de picker ─────────────────────────────────────────────────────
+
+    /// Activa el modo picker: guarda la nav actual y cierra el editor.
+    void crossref_picker_begin() {
+        crossref_picker_active      = true;
+        crossref_picker_saved_stack = nav_stack;
+        crossref_picker_saved_code  = selected_code;
+        crossref_picker_saved_label = selected_label;
+        crossref_picker_saved_dep   = dep_view_active;
+        crossref_picker_saved_dep_id= dep_focus_id;
+        toolbar.editor_open         = false;
+    }
+
+    /// Confirma el picker con `code` como resultado: restaura nav y reabre editor.
+    void crossref_picker_confirm(const std::string& code) {
+        crossref_picker_result  = code;
+        crossref_picker_active  = false;
+        nav_stack               = crossref_picker_saved_stack;
+        selected_code           = crossref_picker_saved_code;
+        selected_label          = crossref_picker_saved_label;
+        dep_view_active         = crossref_picker_saved_dep;
+        dep_focus_id            = crossref_picker_saved_dep_id;
+        toolbar.editor_open     = true;
+    }
+
+    /// Cancela el picker sin resultado: restaura nav y reabre editor.
+    void crossref_picker_cancel() {
+        crossref_picker_active  = false;
+        nav_stack               = crossref_picker_saved_stack;
+        selected_code           = crossref_picker_saved_code;
+        selected_label          = crossref_picker_saved_label;
+        dep_view_active         = crossref_picker_saved_dep;
+        dep_focus_id            = crossref_picker_saved_dep_id;
+        toolbar.editor_open     = true;
     }
 };
 

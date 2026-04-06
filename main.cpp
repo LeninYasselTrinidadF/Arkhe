@@ -94,6 +94,28 @@ static void reload_all_assets(AppState& state,
     state.dep_view_active = false;
 }
 
+// ── draw_crossref_picker_hint ─────────────────────────────────────────────────
+// Dibuja un banner informativo mientras el modo picker está activo.
+// Se llama desde el bucle principal, encima de las vistas.
+
+static void draw_crossref_picker_hint() {
+    const char* hint =
+        "  SELECTOR DE REFERENCIA  |  Navega al nodo deseado  |  [R] Confirmar  |  [Esc] Cancelar  ";
+    const int fs  = 11;
+    const int bh  = 26;
+    const int by  = TOOLBAR_H + 4;
+    const int tw  = MeasureTextF(hint, fs);
+    const int bw  = tw + 20;
+    const int bx  = (SW() - bw) / 2;
+
+    // Fondo + borde llamativo
+    DrawRectangle(bx - 2, by - 2, bw + 4, bh + 4, { 0, 0, 0, 120 });
+    DrawRectangle(bx, by, bw, bh, { 28, 52, 18, 230 });
+    DrawRectangleLinesEx({ (float)bx,(float)by,(float)bw,(float)bh },
+        1.5f, { 120, 200, 60, 240 });
+    DrawTextF(hint, bx + 10, by + (bh - fs) / 2, fs, { 210, 255, 140, 240 });
+}
+
 int main() {
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(1400, 900, "Arkhe");
@@ -199,7 +221,7 @@ int main() {
                 bridge_navigate(state, bs);
         }
 
-        // ── Overlay: limpiar y, si hay panel modal, bloquear todo ─────────────
+        // ── Overlay ───────────────────────────────────────────────────────────
         overlay::clear();
         const bool modal_open = state.toolbar.ubicaciones_open
             || state.toolbar.docs_open
@@ -264,8 +286,14 @@ int main() {
 
         const bool text_field_active = (state.toolbar.active_field >= 0)
             || (state.toolbar.active_field == -99);
+
+        // ── Escape: gestión unificada ─────────────────────────────────────────
         if (IsKeyPressed(KEY_ESCAPE) && !modal_open && !text_field_active) {
-            if (state.dep_view_active) {
+            if (state.crossref_picker_active) {
+                // Cancelar picker: restaurar nav + reabrir editor
+                state.crossref_picker_cancel();
+            }
+            else if (state.dep_view_active) {
                 state.dep_view_active = false;
             }
             else {
@@ -302,6 +330,10 @@ int main() {
 
         draw_toolbar(state, mouse);
         kbnav_draw_indicator();
+
+        // ── Overlay de modo picker (encima de todo) ────────────────────────────
+        if (state.crossref_picker_active)
+            draw_crossref_picker_hint();
 
         DrawFPS(10, SH() - 20);
         EndDrawing();

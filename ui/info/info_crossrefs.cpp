@@ -1,4 +1,5 @@
 #include "ui/info/info_crossrefs.hpp"
+#include "ui/info/info_text_select.hpp"
 #include "ui/aesthetic/font_manager.hpp"
 #include "ui/aesthetic/theme.hpp"
 #include "ui/aesthetic/skin.hpp"
@@ -151,18 +152,20 @@ static void draw_mathlib_hit_card(AppState& state,
                { th.success.r, th.success.g, th.success.b, 40 },
                th.success);
 
+    // Texto seleccionable: nombre corto del módulo
     std::string ms = hit.module;
     auto dot = ms.rfind('.');
     if (dot != std::string::npos) ms = ms.substr(dot + 1);
     if ((int)ms.size() > 22) ms = ms.substr(0, 21) + ".";
-    DrawTextF(ms.c_str(), rx + 8, ry + 7, 12, th.success);
+    DrawTextFS(ms.c_str(), rx + 8, ry + 7, 12, th.success);
 
+    // Texto seleccionable: ruta completa
     std::string mf = hit.module;
     if ((int)mf.size() > 36) mf = ".." + mf.substr(mf.size() - 34);
-    DrawTextF(mf.c_str(), rx + 8, ry + 24, 9, th_alpha(th.success_dim));
+    DrawTextFS(mf.c_str(), rx + 8, ry + 24, 9, th_alpha(th.success_dim));
 
-    DrawTextF(("via " + hit.matched_code).c_str(),
-             rx + 8, ry + 37, 9, th_alpha(th.text_dim));
+    DrawTextFS(("via " + hit.matched_code).c_str(),
+               rx + 8, ry + 37, 9, th_alpha(th.text_dim));
     if (ch > 52)
         DrawTextF("[ click para navegar ]", rx + 8, ry + 50, 8,
                  th_alpha(th.text_dim));
@@ -242,7 +245,7 @@ int draw_crossrefs_block(AppState& state,
     y += 18;
     int ci = 0;
 
-    // Cards MSC
+    // ── Cards MSC ─────────────────────────────────────────────────────────────
     for (auto& code : msc_refs) {
         int rx = col + (ci % 3) * (card_w + 10);
         int ry = y   + (ci / 3) * (card_h + 10);
@@ -266,9 +269,15 @@ int draw_crossrefs_block(AppState& state,
         xref_chip("MSC", rx + card_w - 44, ry + 6,
                    { th.accent.r, th.accent.g, th.accent.b, 40 },
                    th.accent_hover);
-        DrawTextF(code.c_str(),     rx + 10, ry + 10, 14, th.accent_hover);
+        DrawTextFS(code.c_str(),     rx + 10, ry + 10, 14, th.accent_hover);
         DrawTextF("Ver en MSC2020", rx + 10, ry + 32, 10, th_alpha(th.text_secondary));
         DrawTextF("[ click ]",      rx + 10, ry + 48,  9, th_alpha(th.text_dim));
+
+        // Registrar para navegación por teclado
+        {
+            Rectangle cr = { (float)rx, (float)ry, (float)card_w, (float)card_h };
+            kbnav_info_register_crossref(cr, code, InfoItemKind::CrossrefCard);
+        }
 
         if (hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             auto f = find_node_by_code_local(state.msc_root, code);
@@ -280,7 +289,7 @@ int draw_crossrefs_block(AppState& state,
         ci++;
     }
 
-    // Cards STD
+    // ── Cards STD ─────────────────────────────────────────────────────────────
     for (auto& code : std_refs) {
         int rx = col + (ci % 3) * (card_w + 10);
         int ry = y   + (ci / 3) * (card_h + 10);
@@ -308,10 +317,16 @@ int draw_crossrefs_block(AppState& state,
         auto dot = code.rfind('.');
         std::string label = (dot != std::string::npos)
                           ? code.substr(dot + 1) : code;
-        DrawTextF(label.c_str(),     rx + 10, ry + 10, 13, th.success);
-        DrawTextF(code.c_str(),      rx + 10, ry + 28,  9, th_alpha(th.success_dim));
+        DrawTextFS(label.c_str(),    rx + 10, ry + 10, 13, th.success);
+        DrawTextFS(code.c_str(),     rx + 10, ry + 28,  9, th_alpha(th.success_dim));
         DrawTextF("Ver en Estandar", rx + 10, ry + 42, 10, th_alpha(th.text_secondary));
         DrawTextF("[ click ]",       rx + 10, ry + 54,  9, th_alpha(th.text_dim));
+
+        // Registrar para navegación por teclado (nuevo: StdrefCard)
+        {
+            Rectangle cr = { (float)rx, (float)ry, (float)card_w, (float)card_h };
+            kbnav_info_register_crossref(cr, code, InfoItemKind::StdrefCard);
+        }
 
         if (hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
             state.standard_root)
