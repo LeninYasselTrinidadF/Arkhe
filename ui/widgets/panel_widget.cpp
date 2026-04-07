@@ -88,6 +88,17 @@ bool PanelWidget::draw_text_field(char* buf, int buf_len,
     Rectangle r = { (float)x, (float)y, (float)w, (float)h };
     bool hov = CheckCollisionPointRec(mouse, r);
 
+    // ── Auto-activación vía Tab (sin clic) ────────────────────────────────────
+    // Si active_id fue puesto externamente (kbnav Tab) pero g_tf_active_id
+    // no fue sincronizado, sincronizar aquí: el campo toma posesión del input
+    // sin requerir un clic. Esto corrige el bug donde Tab daba apariencia de
+    // selección pero el teclado seguía escribiendo en el campo anterior.
+    if (is_active && g_tf_active_id != my_id) {
+        g_tf_active_id = my_id;
+        int len = (int)strlen(buf);
+        g_tf.set_cursor(len, len);   // cursor al final del contenido actual
+    }
+
     // ── Activar / desactivar con click ────────────────────────────────────────
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         if (hov) {

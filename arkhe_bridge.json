@@ -1,8 +1,8 @@
 {
   "direction": "vscode",
   "mode": "Mathlib",
-  "node_code": "Mathlib.LinearAlgebra.AnnihilatingPolynomial",
-  "node_label": "AnnihilatingPolynomial",
-  "tex_file": "Mathlib_LinearAlgebra_AnnihilatingPolynomial.tex",
-  "timestamp": 1775177405
+  "node_code": "Mathlib.Data.Real.ENatENNReal",
+  "node_label": "ENatENNReal",
+  "tex_file": "Mathlib_Data_Real_ENatENNReal.tex",
+  "timestamp": 1775530087
 }
