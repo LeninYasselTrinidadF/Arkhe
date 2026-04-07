@@ -2,8 +2,6 @@
 
 **Arkhe** is a visual explorer and editor for formal mathematical structures. It combines the MSC2020 classification, the Lean 4 Mathlib library, and custom academic syllabi into a single navigable graph — rendered through a force-directed physics engine with a high-performance 2D renderer.
 
-![Arkhe screenshot](assets/graphics/screenshot.png)
-
 ---
 
 ## Features
