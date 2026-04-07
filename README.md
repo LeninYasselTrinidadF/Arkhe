@@ -98,8 +98,9 @@ Arkhe/
 │   ├── crossref.json       # Mathlib module → MSC + Standard mapping
 │   ├── deps.json           # MSC dependency graph
 │   └── deps_mathlib.json   # Mathlib dependency graph
-└── data/
-└── ui/
+└── data/                   # Main logic
+└── ui/                     # UI components
+└── tools/                  # Implementation of VSCode extension for access    
     
 ```
 
