@@ -100,27 +100,9 @@ Arkhe/
 │   ├── crossref.json       # Mathlib module → MSC + Standard mapping
 │   ├── deps.json           # MSC dependency graph
 │   └── deps_mathlib.json   # Mathlib dependency graph
-└── src/
-    ├── data/               # Loaders, search, generators, editor I/O
-    ├── ui/                 # All rendering: panels, views, controls, kbnav
-    └── main.cpp
-```
-
----
-
-## Building from Source
-
-### Prerequisites
-- Visual Studio 2022
-- [vcpkg](https://github.com/microsoft/vcpkg) with `raylib` and `nlohmann-json`
-- CMake 3.20+
-
-### Build
-```bash
-git clone https://github.com/youruser/Arkhe.git
-cd Arkhe
-cmake --preset x64-release
-cmake --build --preset x64-release
+└── data/
+└── ui/
+    
 ```
 
 Or open the folder directly in Visual Studio and select the `x64-Release` configuration.
